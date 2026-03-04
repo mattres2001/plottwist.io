@@ -11,10 +11,10 @@ const App = () => {
     <>
       <Routes>
         <Route path='/' element={<Login/>}>
-          <Route index element={<MainMenu/>}/>
           <Route path='gallery' element={<Gallery/>}/>
         </Route>
       </Routes>
+      
     </>
   )
 }
