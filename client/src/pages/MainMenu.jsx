@@ -35,7 +35,6 @@ const MainMenu = () => {
           Gallery
         </a>
       </div>
-
     </div>
   )
 }

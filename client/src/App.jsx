@@ -20,6 +20,7 @@ const App = () => {
         <Route path="/session/:sessionCode" element={<Session/>}/>
         {/* <Route path="*" element={<Navigate to="/" replace />} /> */}
       </Routes>
+      
     </>
   )
 }
