@@ -1,4 +1,4 @@
-import { Webhook } from '@clerk/clerk-sdk-node';
+import Clerk from '@clerk/clerk-sdk-node';
 import User from '../models/User.js';
 
 export const handleClerkWebhook = async (req, res) => {
@@ -6,7 +6,11 @@ export const handleClerkWebhook = async (req, res) => {
 
     let event;
     try {
-        event = Webhook.verify(req.body, signature, process.env.CLERK_WEBHOOK_SECRET);
+        event = Clerk.webhooks.verifyRequest({
+            payload: req.body,
+            secret: process.env.CLERK_WEBHOOK_SECRET,
+            signature
+        });
     } catch (err) {
         console.error('Webhook verification failed:', err);
         return res.status(400).send('Invalid signature');
