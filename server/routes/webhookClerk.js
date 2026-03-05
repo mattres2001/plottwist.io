@@ -1,16 +1,16 @@
-import { Webhook } from '@clerk/clerk-sdk-node';
+// routes/webhookClerk.js
+import Clerk from '@clerk/clerk-sdk-node';
 import User from '../models/User.js';
 
 export const handleClerkWebhook = async (req, res) => {
     try {
-        // Pass raw body + headers
-        const event = Webhook.verify(
-            req.body,            // raw Buffer
-            req.headers,         // svix headers
-            process.env.CLERK_WEBHOOK_SECRET
-        );
+        const event = Clerk.webhooks.verifyRequest({
+            payload: req.body,          // raw Buffer from express.raw()
+            secret: process.env.CLERK_WEBHOOK_SECRET,
+            headers: req.headers        // Svix headers included here
+        });
 
-        console.log('Event type:', event.type);
+        console.log('Webhook event type:', event.type);
 
         if (event.type === 'user.created') {
             const user = event.data;
