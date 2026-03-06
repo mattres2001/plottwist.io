@@ -8,15 +8,12 @@ const app = express();
 
 await connectDB();
 
+
+app.post("/webhooks/clerk", express.raw({ type: "application/json" }), handleClerkWebhook);
 app.use(express.json());
 app.use(cors());
 
 app.get('/', (req, res) => res.send("Server is running"));
-app.post(
-    '/webhooks/clerk',
-    express.raw({ type: 'application/json' }),
-    handleClerkWebhook
-); // Clerk webhook endpoint
 
 const PORT = process.env.PORT || 4000;
 
