@@ -2,18 +2,19 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import connectDB from './configs/db.js'
-import { handleClerkWebhook } from './routes/webhookClerk.js';
+import { inngest, functions } from './inngest/index.js';
+// import { handleClerkWebhook } from './routes/webhookClerk.js';
 
 const app = express();
 
 await connectDB();
 
-
-app.post("/webhooks/clerk", express.raw({ type: "application/json" }), handleClerkWebhook);
+// app.post("/webhooks/clerk", express.raw({ type: "application/json" }), handleClerkWebhook);
 app.use(express.json());
 app.use(cors());
 
 app.get('/', (req, res) => res.send("Server is running"));
+app.use('/api/inngest', serve({ client: inngest, functions }));
 
 const PORT = process.env.PORT || 4000;
 
