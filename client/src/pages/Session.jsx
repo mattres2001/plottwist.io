@@ -3,7 +3,7 @@ import { assets } from "../assets/assets.js"
 import { useNavigate, useParams } from 'react-router-dom'
 
 const ROUND_DURATION_MS = 5000   // 5s for "Round X Start" / "Round X End"
-const WRITING_DURATION_MS = 0 * 60 * 1000  // 5 min per round
+const WRITING_DURATION_MS = 5 * 60 * 1000  // 5 min per round
 const REST_DURATION_MS = 5000   // 2s rest after each round end
 const GAME_DURATION_SEC = 15 * 60  // 15 min total game
 const ROUND_DURATION_SEC = 5 * 60  // 5 min per round
