@@ -8,6 +8,7 @@ import Gallery from './pages/Gallery'
 import HostSession from './pages/HostSession'
 import JoinSession from './pages/JoinSession'
 import Session from './pages/Session'
+import ExampleDocumentWriter from './pages/ExampleDocumentWriter'
 import { useUser } from '@clerk/clerk-react'
 import { Toaster } from 'react-hot-toast'
 
@@ -25,6 +26,7 @@ const App = () => {
             <Route path='/host_session' element={<HostSession/>}/>
             <Route path='/join_session' element={<JoinSession/>}/>
             <Route path="/session/:sessionCode" element={<Session/>}/>
+            <Route path="/doc" element={<ExampleDocumentWriter/>}/>
             {/* <Route path="*" element={<Navigate to="/" replace />} /> */}
         </Routes>
       
