@@ -45,6 +45,24 @@ const MOCK_IMAGES = [
   },
 ]
 
+const StarRating = ({ rating, onRate, hoveredStar, onHover }) => (
+  <div className="flex gap-0.5" onMouseLeave={() => onHover(0)}>
+    {[1, 2, 3, 4, 5].map((star) => {
+      const filled = (hoveredStar || rating) >= star
+      return (
+        <span
+          key={star}
+          className={`cursor-pointer text-xl transition-colors duration-150 ${filled ? 'text-amber-400' : 'text-white/60'}`}
+          onMouseEnter={() => onHover(star)}
+          onClick={() => onRate(star)}
+        >
+          {filled ? '★' : '☆'}
+        </span>
+      )
+    })}
+  </div>
+)
+
 const Gallery = () => {
   const navigate = useNavigate()
   const scrollRef = useRef(null)
@@ -52,6 +70,10 @@ const Gallery = () => {
   const PAGE_SIZE = 4
 
   const [items, setItems] = useState([])
+  // Optional: FETCH current user's ratings from MongoDB on mount to hydrate userRatings (e.g. by photoId).
+  const [userRatings, setUserRatings] = useState({})
+  const [hoveredCard, setHoveredCard] = useState(null)
+  const [hoveredStar, setHoveredStar] = useState(0)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
@@ -63,10 +85,8 @@ const Gallery = () => {
     isLoadingRef.current = true
     setIsLoading(true)
 
-    // In the future, replace this block with a real API call
-    // that fetches document previews from MongoDB, e.g.:
-    // const res = await fetch(`/api/gallery?page=${page}&limit=${PAGE_SIZE}`)
-    // const data = await res.json()
+    // FETCH from MongoDB backend: get gallery items (url, title, overallRating) with pagination.
+    // e.g. GET /api/gallery?page=${page}&limit=${PAGE_SIZE} → setItems from response, setHasMore from total.
 
     const start = page * PAGE_SIZE
     const end = start + PAGE_SIZE
@@ -142,6 +162,8 @@ const Gallery = () => {
               <div
                 key={`${image.title}-${index}`}
                 className="relative group overflow-hidden aspect-w-16 aspect-h-9 flex-shrink-0 w-80 rounded-xl shadow-lg cursor-pointer"
+                onMouseEnter={() => setHoveredCard(index)}
+                onMouseLeave={() => { setHoveredCard(null); setHoveredStar(0) }}
               >
                 <img
                   src={image.url}
@@ -151,12 +173,28 @@ const Gallery = () => {
                 />
 
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white flex flex-col justify-end p-4 text-sm">
-                  <div className="font-semibold text-base mb-1">
+                  <div className="font-semibold text-base mb-2">
                     {image.title}
                   </div>
-                  <div className="text-xs text-gray-200">
-                    Rating: {image.rating}/5 · {image.info}
+                  <div className="text-xs text-gray-300 mb-2">
+                    Overall: {image.overallRating ?? image.rating ?? '—'}/5
                   </div>
+                  {hoveredCard === index && (
+                    <div className="flex items-center gap-2">
+                      <StarRating
+                        rating={userRatings[index] || 0}
+                        onRate={(star) => {
+                          setUserRatings(prev => ({ ...prev, [index]: star }))
+                          // SEND to MongoDB backend: persist user rating (e.g. POST /api/gallery/:photoId/rate { rating: star }).
+                        }}
+                        hoveredStar={hoveredStar}
+                        onHover={setHoveredStar}
+                      />
+                      <span className="text-xs text-gray-300">
+                        Your rating: {(hoveredStar || userRatings[index] || 0)}/5
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
