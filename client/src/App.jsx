@@ -8,12 +8,15 @@ import Gallery from './pages/Gallery'
 import HostSession from './pages/HostSession'
 import JoinSession from './pages/JoinSession'
 import Session from './pages/Session'
+import { useUser } from '@clerk/clerk-react'
 
 const App = () => {
+  const { user } = useUser()
+
   return (
     <>
       <Routes>
-        <Route path='/' element={<MainMenu/>}/>
+        <Route path='/' element={ !user ? <Login/> : <MainMenu/>}/>
         <Route path='/gallery' element={<Gallery/>}/>
         <Route path='/host_session' element={<HostSession/>}/>
         <Route path='/join_session' element={<JoinSession/>}/>
