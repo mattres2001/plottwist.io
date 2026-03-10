@@ -7,7 +7,7 @@ export const inngest = new Inngest({ id: "plottwist-io" });
 // Inngest function to save user data to database
 const syncUserCreation = inngest.createFunction(
     { id: 'sync-user-from-clerk' },
-    { event: 'user.created' },
+    { event: 'clerk/user.created' },
     async ({event}) => {
 
         // 🔹 Log the event to confirm it's arriving
