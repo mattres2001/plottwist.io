@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { assets } from "../assets/assets.js"
 import { useNavigate, useParams } from 'react-router-dom'
+import DocumentEditor from "../components/DocumentEditor";
+import DocumentWindow from '../components/DocumentWindow';
 
 const ROUND_DURATION_MS = 5000   // 5s for "Round X Start" / "Round X End"
 const WRITING_DURATION_MS = 5 * 60 * 1000  // 5 min per round
@@ -137,7 +139,7 @@ const Session = () => {
   }
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden">
+    <div className="relative h-screen w-screen bg-gray-100 flex items-center justify-center overflow-hidden">
       <img
         src={assets.bg_image_login}
         className="absolute inset-0 h-full w-full object-cover"
@@ -171,8 +173,10 @@ const Session = () => {
         </div>
       )}
 
-      {/* Document writing UI goes here (during Writing phase) */}
-
+      <div className="absolute bottom-0 z-5 px-3 py-0 rounded-lg font-mono">
+        <DocumentWindow/>
+      </div>
+  
       {phase.label === 'Rest Period' && (
         <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
           <div className="px-8 py-4 rounded-xl text-center font-bold text-2xl md:text-3xl shadow-lg bg-black/60 text-white">
