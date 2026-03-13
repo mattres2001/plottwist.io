@@ -13,7 +13,7 @@ const DocumentEditor = ({ content, onChange }) => {
             }
         },
         onUpdate({ editor }) {
-            if (onChange) onChange(editor.getHTML())
+            if (onChange) onChange(editor.getText())   
         }
     })
 
