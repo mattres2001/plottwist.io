@@ -1,21 +1,20 @@
-import React, { useState } from "react";
+import React from "react";
 import DocumentEditor from './DocumentEditor';
 
-const DocumentWindow = () => {
-
-
-  const [content, setContent] = useState("");
-
+const DocumentWindow = ({ lockedContent, currentContent, onContentChange }) => {
   return (
-      <div className="relative z-10 w-[600px] h-[400px] bg-gray-200 rounded-lg shadow-lg overflow-auto flex justify-center items-start p-4">
-        {/* Paper */}
-        <div className="w-[816px] aspect-[8.5/11] bg-white shadow-2xl rounded-sm flex flex-col">
-          {/* Page margins */}
-          <div className="p-8 flex-1">
-            <DocumentEditor content={content} onChange={setContent} />
-          </div>
+    <div className="relative z-5 w-[530px] h-[660px] rounded-lg shadow-lg overflow-y-auto overflow-x-hidden flex justify-center items-start p-0">
+      <div className="w-full bg-white shadow-2xl rounded-sm flex flex-col min-h-full">
+        <div className="p-6 flex-1 text-sm">
+          {lockedContent ? (
+            <div className="text-gray-800 whitespace-pre-wrap mb-1 select-none pointer-events-none" style={{ fontFamily: 'inherit', fontSize: 'inherit' }}>
+              {lockedContent}
+            </div>
+          ) : null}
+          <DocumentEditor content={currentContent} onChange={onContentChange} />
         </div>
       </div>
+    </div>
   );
 };
 
