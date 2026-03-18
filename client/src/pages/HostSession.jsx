@@ -1,24 +1,40 @@
 import React, { useEffect } from "react"
 import { assets } from "../assets/assets.js"
 import { useNavigate } from "react-router-dom"
+import { useAuth } from '@clerk/clerk-react'
+import api from '../api/axios.js'
+import toast from 'react-hot-toast'
 
 const HostSession = () => {
     const navigate = useNavigate()
+    const { getToken } = useAuth()
 
-    // REPLACE IN FUTURE
-    useEffect(() => {
-        const createSession = async () => {
-        
-        setTimeout(() => {
-            // Random session code
-            const sessionCode = Math.random().toString(36).substring(2, 8).toUpperCase()
+    const handleStartSession = async () => {
+        try {
+            const { data } = await api.post(
+                '/api/session/start', 
+                {}, 
+                { 
+                    headers: { 
+                        Authorization: `Bearer ${await getToken()}`
+                    } 
+                }
+            )
 
-            navigate(`/session/${sessionCode}`)
-        }, 2000)
+            if (data.success) {
+                navigate(`/session/${data.newSession.code}`)
+            } else {
+                console.log(data.message)
+                toast.error(data.message)
+            }
+        } catch (error) {
+            toast.error(error.message)
         }
+    }
 
-        createSession()
-    }, [navigate])
+    useEffect(() => {
+        handleStartSession()
+    })
 
     return (
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center">

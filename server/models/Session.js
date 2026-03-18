@@ -1,7 +1,6 @@
 import mongoose from 'mongoose'
 
 const sessionSchema = new mongoose.Schema({
-    _id: { type: String, required: true },      // could be a short code
     code: { type: String, requried: true},
     hostId: { type: String, required: true },   // user who started the session
     players: [{ type: String, ref: 'User' }],  // list of user IDs

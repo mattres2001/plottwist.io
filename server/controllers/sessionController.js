@@ -1,5 +1,5 @@
-import Session from '../models/Session'
-import { generateSessionCode } from '../utils/sessionCode'
+import Session from '../models/Session.js'
+import { generateSessionCode } from '../utils/sessionCode.js'
 
 export const startSession = async (req, res) => {
     try {
@@ -18,8 +18,10 @@ export const startSession = async (req, res) => {
         }
 
         const newSession = await Session.create({
-            code: code,
-            hostId: userId
+            code,
+            hostId: userId,
+            players: [userId],
+            status: 'waiting'
         })
 
         res.json({

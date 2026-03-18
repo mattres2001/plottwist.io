@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 
-export function generateSessionCode(length = 5) {
+export function generateSessionCode(length = 6) {
     const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
     const array = new Uint32Array(length);
     crypto.getRandomValues(array);

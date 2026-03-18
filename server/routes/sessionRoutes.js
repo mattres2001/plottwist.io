@@ -6,6 +6,6 @@ import {
 
 const sessionRouter = express.Router();
 
-meeting.post('/start', protect, startSession)
+sessionRouter.post('/start', protect, startSession)
 
 export default sessionRouter;
