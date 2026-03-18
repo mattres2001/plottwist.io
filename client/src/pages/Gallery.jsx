@@ -139,13 +139,13 @@ const Gallery = () => {
   }, [loadMore])
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden">
+    // <div className="relative h-screen w-screen overflow-hidden">
  
-      <img
-        src={assets.bg_image_login}
-        className="absolute inset-0 h-full w-full object-cover"
-        alt="background"
-      />
+    //   <img
+    //     src={assets.bg_image_login}
+    //     className="absolute inset-0 h-full w-full object-cover"
+    //     alt="background"
+    //   />
 
       <div className="relative z-10 flex items-center h-full px-10">
 
@@ -208,7 +208,7 @@ const Gallery = () => {
         </div>
 
       </div>
-    </div>
+    // </div>
   )
 }
 

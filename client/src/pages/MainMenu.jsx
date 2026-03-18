@@ -7,13 +7,13 @@ const MainMenu = () => {
   const navigate = useNavigate()
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden">
+    // <div className="relative h-screen w-screen overflow-hidden">
       
-      <img
-        src={assets.bg_image_login}
-        className="absolute inset-0 h-full w-full object-cover"
-        alt="background"
-      />
+    //   <img
+    //     src={assets.bg_image_login}
+    //     className="absolute inset-0 h-full w-full object-cover"
+    //     alt="background"
+    //   />
 
       <div className="relative z-10 flex flex-col items-center justify-center h-full space-y-5">
         <a
@@ -35,7 +35,7 @@ const MainMenu = () => {
           Gallery
         </a>
       </div>
-    </div>
+    // </div>
   )
 }
 
