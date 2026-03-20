@@ -9,8 +9,11 @@ const REST_DURATION_MS = 5000
 const GAME_DURATION_SEC = 15 * 60
 const ROUND_DURATION_SEC = 5 * 60
 
-const TURN_DURATION_SEC = 30 // each player's turn lasts 30 seconds
-const ACTION_PROMPT_SEC = 5  // show action picker for last N seconds of turn (or at start)
+const TURN_DURATION_SEC = 30
+const ACTION_PROMPT_SEC = 5
+
+const MIN_PLAYERS = 2
+const MAX_PLAYERS = 4
 
 // Mock player list — replace with real multiplayer data
 const MOCK_PLAYERS = ['Alice', 'Bob', 'Charlie', 'Diana']
@@ -38,6 +41,173 @@ const PHASES = [
   { label: 'The End', duration: REST_DURATION_MS },
 ]
 
+// ─── Waiting Room ────────────────────────────────────────────────────────────
+const WaitingRoom = ({ sessionCode, players, onStart, isHost }) => {
+  const canStart = players.length >= MIN_PLAYERS
+  const [dots, setDots] = useState('')
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots(d => d.length >= 3 ? '' : d + '.')
+    }, 500)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <div className="relative h-screen w-screen flex items-center justify-center overflow-hidden">
+      <img
+        src={assets.bg_image_login}
+        className="absolute inset-0 h-full w-full object-cover"
+        alt="background"
+      />
+      <div className="absolute inset-0 bg-black/65" />
+
+      <div
+        className="absolute inset-0 pointer-events-none z-[1]"
+        style={{
+          backgroundImage: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 2px)',
+        }}
+      />
+
+      <div className="absolute top-10 right-6 z-20 bg-black/60 text-white px-3 py-1 rounded-lg font-mono text-base">
+        Session Code: {sessionCode || '—'}
+      </div>
+
+      <div className="relative z-10 flex flex-col items-center gap-8 w-full max-w-lg px-4">
+
+        <div className="text-center">
+          <h1 className="text-white font-bold text-4xl tracking-tight drop-shadow-lg">
+            Waiting for players to join{dots}
+          </h1>
+          <p className="text-white/40 text-sm mt-2">
+            At least {MIN_PLAYERS} players needed to start
+          </p>
+        </div>
+
+        <div
+          className="w-full rounded-2xl overflow-hidden"
+          style={{
+            background: 'rgba(10,10,20,0.7)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            backdropFilter: 'blur(12px)',
+          }}
+        >
+          <div
+            className="px-6 py-3 flex items-center justify-between"
+            style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+          >
+            <span className="text-white/50 text-xs uppercase tracking-widest font-mono">
+              Players
+            </span>
+            <span className="text-white/50 text-xs font-mono">
+              <span className={players.length >= MIN_PLAYERS ? 'text-sky-300' : 'text-white/50'}>
+                {players.length}
+              </span>
+              <span className="text-white/30"> / {MAX_PLAYERS}</span>
+            </span>
+          </div>
+
+          <div className="p-4 flex flex-col gap-2">
+            {Array.from({ length: MAX_PLAYERS }).map((_, i) => {
+              const player = players[i]
+              const isYou = i === 0
+              return (
+                <div
+                  key={i}
+                  className="flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300"
+                  style={{
+                    background: player
+                      ? 'rgba(255,255,255,0.05)'
+                      : 'rgba(255,255,255,0.02)',
+                    border: player
+                      ? isYou
+                        ? '1px solid rgba(125,211,252,0.3)'
+                        : '1px solid rgba(255,255,255,0.08)'
+                      : '1px dashed rgba(255,255,255,0.08)',
+                  }}
+                >
+                  {player ? (
+                    <>
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                        style={{
+                          background: isYou
+                            ? 'rgba(125,211,252,0.2)'
+                            : 'rgba(255,255,255,0.1)',
+                          border: isYou
+                            ? '1px solid rgba(125,211,252,0.5)'
+                            : '1px solid rgba(255,255,255,0.15)',
+                          color: isYou ? '#7dd3fc' : 'rgba(255,255,255,0.7)',
+                        }}
+                      >
+                        {player[0].toUpperCase()}
+                      </div>
+                      <span className={`font-medium text-sm ${isYou ? 'text-sky-300' : 'text-white/80'}`}>
+                        {player}
+                      </span>
+                      {isYou && (
+                        <span className="ml-auto text-sky-300/50 text-xs font-mono uppercase tracking-wider">
+                          You {isHost ? '· Host' : ''}
+                        </span>
+                      )}
+                      {i === 1 && (
+                        <span className="ml-auto">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse" />
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-8 h-8 rounded-full flex-shrink-0"
+                        style={{ background: 'rgba(255,255,255,0.04)', border: '1px dashed rgba(255,255,255,0.1)' }}
+                      />
+                      <span className="text-white/20 text-sm italic">
+                        Waiting for player{dots}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Start button — host only */}
+        {isHost ? (
+          <button
+            onClick={canStart ? onStart : undefined}
+            disabled={!canStart}
+            className="w-full py-4 rounded-xl font-bold text-base tracking-wide transition-all duration-300"
+            style={{
+              background: canStart
+                ? 'linear-gradient(135deg, #38bdf8 0%, #7dd3fc 100%)'
+                : 'rgba(255,255,255,0.06)',
+              color: canStart ? '#001a2e' : 'rgba(255,255,255,0.2)',
+              border: canStart
+                ? '1px solid rgba(125,211,252,0.6)'
+                : '1px solid rgba(255,255,255,0.08)',
+              cursor: canStart ? 'pointer' : 'not-allowed',
+              boxShadow: canStart ? '0 4px 24px rgba(125,211,252,0.3)' : 'none',
+            }}
+          >
+            {canStart ? 'Start Session →' : `Waiting for ${MIN_PLAYERS - players.length} more player${MIN_PLAYERS - players.length !== 1 ? 's' : ''}…`}
+          </button>
+        ) : (
+          <div
+            className="w-full py-4 rounded-xl text-center text-white/30 text-sm font-mono"
+            style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px dashed rgba(255,255,255,0.08)',
+            }}
+          >
+            Waiting for host to start{dots}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const StarRating = ({ rating, onRate, hoveredStar, onHover, size = "6xl" }) => (
   <div className="flex gap-2 justify-center" onMouseLeave={() => onHover && onHover(0)}>
     {[1,2,3,4,5].map((star)=>{
@@ -45,7 +215,7 @@ const StarRating = ({ rating, onRate, hoveredStar, onHover, size = "6xl" }) => (
       return (
         <span
           key={star}
-          className={`${onRate ? 'cursor-pointer' : ''} text-${size} leading-none transition-colors duration-150 ${filled ? 'text-amber-400' : 'text-white/40'}`}
+          className={`${onRate ? 'cursor-pointer' : ''} text-${size} leading-none transition-colors duration-150 ${filled ? 'text-sky-300' : 'text-white/40'}`}
           onMouseEnter={()=>onHover && onHover(star)}
           onClick={()=>onRate && onRate(star)}
         >
@@ -60,8 +230,6 @@ const StarRating = ({ rating, onRate, hoveredStar, onHover, size = "6xl" }) => (
 const ActionPrompt = ({ playerName, isMyTurn, onSelectAction, timeLeft, turnTimeLeft }) => {
   const urgency = turnTimeLeft <= 10
 
-  // When it's another player's turn, show a compact floating banner
-  // anchored to the right-middle of the screen
   if (!isMyTurn) {
     return (
       <div
@@ -81,13 +249,9 @@ const ActionPrompt = ({ playerName, isMyTurn, onSelectAction, timeLeft, turnTime
     )
   }
 
-  // It's your turn — show the full modal, shifted slightly higher (top-[38%])
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[14vh]">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-
-      {/* Modal */}
       <div
         className="relative z-10 w-[520px] rounded-2xl overflow-hidden shadow-2xl"
         style={{
@@ -95,25 +259,16 @@ const ActionPrompt = ({ playerName, isMyTurn, onSelectAction, timeLeft, turnTime
           border: '1px solid rgba(255,255,255,0.12)',
         }}
       >
-        {/* Top bar */}
         <div
           className="px-6 pt-5 pb-4 flex items-center justify-between"
           style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
         >
           <div>
-            <p className="text-white/50 text-xs uppercase tracking-widest mb-1">
-              Your Turn
-            </p>
-            <h2 className="text-white font-bold text-xl">
-              Choose your next move
-            </h2>
+            <p className="text-white/50 text-xs uppercase tracking-widest mb-1">Your Turn</p>
+            <h2 className="text-white font-bold text-xl">Choose your next move</h2>
           </div>
-
-          {/* Circular turn timer */}
           <TurnTimerRing seconds={turnTimeLeft} total={TURN_DURATION_SEC} urgency={urgency} />
         </div>
-
-        {/* Action buttons */}
         <div className="p-5 grid grid-cols-1 gap-2">
           {SCREENPLAY_ACTIONS.map((action) => (
             <button
@@ -125,8 +280,8 @@ const ActionPrompt = ({ playerName, isMyTurn, onSelectAction, timeLeft, turnTime
                 border: '1px solid rgba(255,255,255,0.08)',
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.background = 'rgba(251,191,36,0.15)'
-                e.currentTarget.style.borderColor = 'rgba(251,191,36,0.4)'
+                e.currentTarget.style.background = 'rgba(125,211,252,0.15)'
+                e.currentTarget.style.borderColor = 'rgba(125,211,252,0.4)'
               }}
               onMouseLeave={e => {
                 e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
@@ -138,15 +293,13 @@ const ActionPrompt = ({ playerName, isMyTurn, onSelectAction, timeLeft, turnTime
                 <span className="text-white font-semibold tracking-wide">[{action.label}]</span>
                 <span className="text-white/40 text-sm ml-3">{action.desc}</span>
               </div>
-              <span className="text-amber-400/0 group-hover:text-amber-400/80 text-lg transition-all duration-200">→</span>
+              <span className="text-sky-300/0 group-hover:text-sky-300/80 text-lg transition-all duration-200">→</span>
             </button>
           ))}
         </div>
-
-        {/* Bottom urgency bar */}
         <div className="h-1 w-full bg-white/10 relative overflow-hidden">
           <div
-            className={`h-full transition-all duration-1000 ease-linear ${urgency ? 'bg-red-500' : 'bg-amber-400'}`}
+            className={`h-full transition-all duration-1000 ease-linear ${urgency ? 'bg-red-500' : 'bg-sky-300'}`}
             style={{ width: `${(turnTimeLeft / TURN_DURATION_SEC) * 100}%` }}
           />
         </div>
@@ -155,19 +308,17 @@ const ActionPrompt = ({ playerName, isMyTurn, onSelectAction, timeLeft, turnTime
   )
 }
 
-// Circular countdown ring for the turn timer
 const TurnTimerRing = ({ seconds, total, urgency }) => {
   const r = 22
   const circ = 2 * Math.PI * r
   const progress = (seconds / total) * circ
-
   return (
     <div className="relative w-14 h-14 flex items-center justify-center">
       <svg className="absolute inset-0 -rotate-90" width="56" height="56">
         <circle cx="28" cy="28" r={r} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="3" />
         <circle
           cx="28" cy="28" r={r} fill="none"
-          stroke={urgency ? '#ef4444' : '#fbbf24'}
+          stroke={urgency ? '#ef4444' : '#7dd3fc'}
           strokeWidth="3"
           strokeDasharray={`${progress} ${circ}`}
           strokeLinecap="round"
@@ -181,19 +332,18 @@ const TurnTimerRing = ({ seconds, total, urgency }) => {
   )
 }
 
-// Small HUD showing whose turn it is
 const TurnHUD = ({ playerName, isMyTurn, turnTimeLeft }) => (
   <div
     className="absolute top-7 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2 rounded-full"
     style={{
       background: 'rgba(0,0,0,0.7)',
-      border: isMyTurn ? '1px solid rgba(251,191,36,0.6)' : '1px solid rgba(255,255,255,0.15)',
+      border: isMyTurn ? '1px solid rgba(125,211,252,0.6)' : '1px solid rgba(255,255,255,0.15)',
       backdropFilter: 'blur(8px)',
     }}
   >
-    <span className={`w-2 h-2 rounded-full animate-pulse ${isMyTurn ? 'bg-amber-400' : 'bg-white/40'}`} />
+    <span className={`w-2 h-2 rounded-full animate-pulse ${isMyTurn ? 'bg-sky-300' : 'bg-white/40'}`} />
     <span className="text-white text-sm font-medium">
-      {isMyTurn ? <span className="text-amber-400 font-bold">Your turn</span> : <><span className="text-white/60">{playerName}'s turn</span></>}
+      {isMyTurn ? <span className="text-sky-300 font-bold">Your turn</span> : <><span className="text-white/60">{playerName}'s turn</span></>}
     </span>
     <span className="font-mono text-xs text-white/50 ml-1">{turnTimeLeft}s</span>
   </div>
@@ -204,6 +354,30 @@ const Session = () => {
 
   const navigate = useNavigate()
   const { sessionCode } = useParams()
+
+  // ── Waiting room state ──
+  // In a real app, `joinedPlayers` would come from your backend/socket.
+  // Here we simulate players joining every 3 seconds for demo purposes.
+  const [joinedPlayers, setJoinedPlayers] = useState(['Alice'])
+  const [sessionStarted, setSessionStarted] = useState(false)
+  const IS_HOST = true // simulate: current user is the host
+
+  // Simulate a second player joining after 3 seconds (remove in production)
+  useEffect(() => {
+    if (sessionStarted) return
+    const t = setTimeout(() => {
+      setJoinedPlayers(prev =>
+        prev.includes('Bob') ? prev : [...prev, 'Bob']
+      )
+    }, 3000)
+    return () => clearTimeout(t)
+  }, [sessionStarted])
+
+  const handleStartSession = () => {
+    if (joinedPlayers.length >= MIN_PLAYERS) {
+      setSessionStarted(true)
+    }
+  }
 
   const [showConfirm,setShowConfirm] = useState(false)
   const [phaseIndex,setPhaseIndex] = useState(0)
@@ -220,14 +394,11 @@ const Session = () => {
   const [lockedContent,setLockedContent] = useState("")
   const [currentContent,setCurrentContent] = useState("")
 
-  // ── Turn system state ──
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0)
   const [turnTimeLeft, setTurnTimeLeft] = useState(TURN_DURATION_SEC)
   const [showActionPrompt, setShowActionPrompt] = useState(false)
   const [selectedAction, setSelectedAction] = useState(null)
 
-  // In a real multiplayer app you'd get this from auth/context.
-  // Here we simulate "you are Alice (index 0)"
   const MY_PLAYER_INDEX = 0
   const isWriting = PHASES[phaseIndex]?.label === 'Writing'
   const currentPlayer = MOCK_PLAYERS[currentPlayerIndex]
@@ -246,17 +417,12 @@ const Session = () => {
     title:"Generated Storyboard"
   }
 
-  // ── Turn countdown — only runs during Writing ──
   useEffect(() => {
-    if (!isWriting) return
-
-    // Show prompt at the START of each turn
+    if (!isWriting || !sessionStarted) return
     setShowActionPrompt(true)
-
     const interval = setInterval(() => {
       setTurnTimeLeft(prev => {
         if (prev <= 1) {
-          // Advance to next player
           setCurrentPlayerIndex(i => (i + 1) % MOCK_PLAYERS.length)
           setSelectedAction(null)
           setShowActionPrompt(true)
@@ -265,11 +431,9 @@ const Session = () => {
         return prev - 1
       })
     }, 1000)
-
     return () => clearInterval(interval)
-  }, [isWriting, currentPlayerIndex])
+  }, [isWriting, currentPlayerIndex, sessionStarted])
 
-  // Reset turn system when Writing phase starts/ends
   useEffect(() => {
     if (isWriting) {
       setCurrentPlayerIndex(0)
@@ -281,26 +445,11 @@ const Session = () => {
     }
   }, [isWriting])
 
-  // ── Per-action handlers — fill these in with your game logic ──
-  const handleSceneAction = () => {
-    // TODO: handle Scene action
-  }
-
-  const handleActionAction = () => {
-    // TODO: handle Action action
-  }
-
-  const handleCharacterAction = () => {
-    // TODO: handle Character action
-  }
-
-  const handleDialogueAction = () => {
-    // TODO: handle Dialogue action
-  }
-
-  const handleTransitionAction = () => {
-    // TODO: handle Transition action
-  }
+  const handleSceneAction = () => {}
+  const handleActionAction = () => {}
+  const handleCharacterAction = () => {}
+  const handleDialogueAction = () => {}
+  const handleTransitionAction = () => {}
 
   const ACTION_HANDLERS = {
     SCENE:      handleSceneAction,
@@ -313,14 +462,12 @@ const Session = () => {
   const handleSelectAction = (action) => {
     setSelectedAction(action)
     setShowActionPrompt(false)
-    // Insert the tag into the document
     setCurrentContent(prev => prev + `[${action.label.toUpperCase()}] `)
-    // Call the specific handler for this action
     ACTION_HANDLERS[action.tag]?.()
   }
 
-  // ── Phase advancement ──
   useEffect(()=>{
+    if (!sessionStarted) return
     if(prevPhaseRef.current !== phaseIndex){
       const prevPhase = PHASES[prevPhaseRef.current]
       if(prevPhase.label === 'Writing'){
@@ -332,33 +479,36 @@ const Session = () => {
       }
       prevPhaseRef.current = phaseIndex
     }
-  },[phaseIndex])
+  },[phaseIndex, sessionStarted])
 
   useEffect(()=>{
+    if(!sessionStarted) return
     if(phaseIndex >= PHASES.length - 1) return
     const t = setTimeout(()=>{
       setPhaseIndex(i => Math.min(i+1,PHASES.length-1))
     },phase.duration)
     return ()=>clearTimeout(t)
-  },[phaseIndex,phase.duration])
+  },[phaseIndex, phase.duration, sessionStarted])
 
   useEffect(()=>{
+    if(!sessionStarted) return
     const interval = setInterval(()=>{
       if(phase.label === 'Writing'){
         setElapsedSeconds(s => Math.min(s+1,GAME_DURATION_SEC))
       }
     },1000)
     return ()=>clearInterval(interval)
-  },[phase.label])
+  },[phase.label, sessionStarted])
 
   useEffect(()=>{
+    if(!sessionStarted) return
     const interval = setInterval(()=>{
       if(phase.label === 'Writing'){
         setRoundTimeRemaining(r => Math.max(0,r-1))
       }
     },1000)
     return ()=>clearInterval(interval)
-  },[phase.label])
+  },[phase.label, sessionStarted])
 
   useEffect(()=>{
     if(phase.label === 'The End'){
@@ -379,13 +529,24 @@ const Session = () => {
 
   const handleGenerateStoryboard = ()=>{ setShowStoryboard(true) }
 
-  // Screenplay action bar handlers — insert tag at cursor
   const insertTag = (tag) => setCurrentContent(prev => prev + `[${tag}] `)
   const handleScene = () => insertTag('SCENE')
   const handleAction = () => insertTag('ACTION')
   const handleCharacter = () => insertTag('CHARACTER')
   const handleDialogue = () => insertTag('DIALOGUE')
   const handleTransition = () => insertTag('TRANSITION')
+
+  // ── Show waiting room until session is started ──
+  if (!sessionStarted) {
+    return (
+      <WaitingRoom
+        sessionCode={sessionCode}
+        players={joinedPlayers}
+        onStart={handleStartSession}
+        isHost={IS_HOST}
+      />
+    )
+  }
 
   return (
     <div className="relative h-screen w-screen bg-gray-100 flex items-center justify-center overflow-hidden">
@@ -412,7 +573,6 @@ const Session = () => {
         Session Code: {sessionCode || '—'}
       </div>
 
-      {/* ── Turn HUD (Writing only) ── */}
       {isWriting && (
         <TurnHUD
           playerName={currentPlayer}
@@ -421,9 +581,6 @@ const Session = () => {
         />
       )}
 
-      {/* ── Action Prompt (Writing only) ──
-          When it's your turn: modal shifted slightly higher than center.
-          When it's another player's turn: compact banner on the right-middle edge. */}
       {isWriting && showActionPrompt && (
         <ActionPrompt
           playerName={currentPlayer}
@@ -453,11 +610,11 @@ const Session = () => {
 
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-5">
             <div className="flex gap-3 bg-black/60 text-white px-4 py-2 rounded-lg text-sm">
-              <button onClick={handleScene}      className="hover:text-amber-400">Scene</button>
-              <button onClick={handleAction}     className="hover:text-amber-400">Action</button>
-              <button onClick={handleCharacter}  className="hover:text-amber-400">Character</button>
-              <button onClick={handleDialogue}   className="hover:text-amber-400">Dialogue</button>
-              <button onClick={handleTransition} className="hover:text-amber-400">Transition</button>
+              <button onClick={handleScene}      className="hover:text-sky-300">Scene</button>
+              <button onClick={handleAction}     className="hover:text-sky-300">Action</button>
+              <button onClick={handleCharacter}  className="hover:text-sky-300">Character</button>
+              <button onClick={handleDialogue}   className="hover:text-sky-300">Dialogue</button>
+              <button onClick={handleTransition} className="hover:text-sky-300">Transition</button>
             </div>
           </div>
         </>
@@ -498,7 +655,7 @@ const Session = () => {
                     <p className="text-white/80 text-lg mb-2">Your rating</p>
                     <StarRating rating={sessionRating} size="4xl"/>
                     <div className="flex items-center justify-center gap-2 mt-2">
-                      <span className="text-amber-400 font-bold text-xl">{sessionRating}</span>
+                      <span className="text-sky-300 font-bold text-xl">{sessionRating}</span>
                       <span className="text-white/60 text-sm">/ 5</span>
                     </div>
                   </div>
@@ -511,7 +668,7 @@ const Session = () => {
                       <>
                         <StarRating rating={Math.round(overallRating)} size="4xl"/>
                         <div className="flex items-center justify-center gap-2 mt-2">
-                          <span className="text-amber-400 font-bold text-xl">{overallRating.toFixed(1)}</span>
+                          <span className="text-sky-300 font-bold text-xl">{overallRating.toFixed(1)}</span>
                           <span className="text-white/60 text-sm">/ 5</span>
                         </div>
                       </>
@@ -523,7 +680,7 @@ const Session = () => {
                   {!showStoryboard && (
                     <button
                       onClick={handleGenerateStoryboard}
-                      className="mt-4 bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200"
+                      className="mt-4 bg-sky-400 hover:bg-sky-500 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200"
                     >
                       Generate Storyboard →
                     </button>
