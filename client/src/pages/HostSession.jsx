@@ -4,10 +4,12 @@ import { useNavigate } from "react-router-dom"
 import { useAuth } from '@clerk/clerk-react'
 import api from '../api/axios.js'
 import toast from 'react-hot-toast'
+import { store } from '../store/store.js'
 
 const HostSession = () => {
     const navigate = useNavigate()
     const { getToken } = useAuth()
+    const setSession = store((state) => state.setSession)
 
     const handleStartSession = async () => {
         try {
@@ -22,6 +24,7 @@ const HostSession = () => {
             )
 
             if (data.success) {
+                setSession(data.newSession)
                 navigate(`/session/${data.newSession.code}`)
             } else {
                 console.log(data.message)
@@ -34,7 +37,7 @@ const HostSession = () => {
 
     useEffect(() => {
         handleStartSession()
-    })
+    }, [])
 
     return (
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center">
