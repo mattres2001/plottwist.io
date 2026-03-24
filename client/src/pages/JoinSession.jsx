@@ -1,24 +1,48 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { assets } from "../assets/assets.js"
+import api from '../api/axios.js'
+import toast from 'react-hot-toast'
+import { useAuth } from '@clerk/clerk-react'
 
 const JoinSession = () => {
-  const [sessionCode, setSessionCode] = useState('')
-  const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
+    const [sessionCode, setSessionCode] = useState('')
+    const [loading, setLoading] = useState(false)
+    const navigate = useNavigate()
+    const { getToken } = useAuth()
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    setLoading(true)
+    const handleSubmit = async (e) => {
+        e.preventDefault()
+        setLoading(true)
 
-    // REPLACE IN FUTURE
-    setTimeout(() => {
-      console.log('Joining session with code:', sessionCode || 'RANDOM')
-      setLoading(false)
+        try {
+            const { data } = await api.post(
+                '/api/session/join', 
+                {code: sessionCode}, 
+                { 
+                    headers: { 
+                        Authorization: `Bearer ${await getToken()}`
+                    } 
+                }
+            )
 
-      navigate(`/session/${sessionCode || 'RANDOM'}`)
-    }, 2000)
-  }
+            if (data.success) {
+                navigate(`/session/${sessionCode}`)
+            } else
+                toast.error(data.message)
+        } catch (error) {
+            toast.error(error.message)
+        }
+
+
+        // REPLACE IN FUTURE
+        // setTimeout(() => {
+        //   console.log('Joining session with code:', sessionCode || 'RANDOM')
+        //   setLoading(false)
+
+        //   navigate(`/session/${sessionCode || 'RANDOM'}`)
+        // }, 2000)
+    }
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
