@@ -5,6 +5,7 @@ import { useAuth } from '@clerk/clerk-react'
 import api from '../api/axios.js'
 import toast from 'react-hot-toast'
 import { store } from '../store/store.js'
+import { socket } from "../socket";
 
 const HostSession = () => {
     const navigate = useNavigate()
@@ -24,8 +25,10 @@ const HostSession = () => {
             )
 
             if (data.success) {
-                setSession(data.newSession)
-                navigate(`/session/${data.newSession.code}`)
+                const newSession = data.newSession
+                setSession(newSession)
+                socket.emit("join_session", newSession.code);
+                navigate(`/session/${newSession.code}`)
             } else {
                 console.log(data.message)
                 toast.error(data.message)

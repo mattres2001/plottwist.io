@@ -33,15 +33,6 @@ const JoinSession = () => {
         } catch (error) {
             toast.error(error.message)
         }
-
-
-        // REPLACE IN FUTURE
-        // setTimeout(() => {
-        //   console.log('Joining session with code:', sessionCode || 'RANDOM')
-        //   setLoading(false)
-
-        //   navigate(`/session/${sessionCode || 'RANDOM'}`)
-        // }, 2000)
     }
 
   return (

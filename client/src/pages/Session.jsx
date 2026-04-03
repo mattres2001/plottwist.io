@@ -184,7 +184,7 @@ const TurnHUD = ({ playerName, isMyTurn, turnTimeLeft }) => (
 )
 
 // ─── Main Session Component ──────────────────────────────────────────────────
-const Session = () => {
+const Session = ({ socket }) => {
 
   const navigate = useNavigate()
   const { sessionCode } = useParams()
@@ -379,6 +379,7 @@ const Session = () => {
         players={joinedPlayers}
         onStart={handleStartSession}
         isHost={IS_HOST}
+        socket={socket}
       />
     )
   }

@@ -1,5 +1,6 @@
 import Session from '../models/Session.js'
 import { generateSessionCode } from '../utils/sessionCode.js'
+import { io } from '../server.js'
 
 export const startSession = async (req, res) => {
     try {
