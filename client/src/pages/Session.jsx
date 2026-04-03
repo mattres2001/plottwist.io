@@ -241,6 +241,7 @@ const Session = () => {
 
   const isRestRef = useRef(false)
   const prevPhaseRef = useRef(0)
+  const editorRef = useRef(null) // ref to DocumentEditor — call editorRef.current.insertHTML(html) to insert content
 
   const phase = PHASES[phaseIndex]
   const isRoundScreen = phase.label.startsWith('Act')
@@ -280,11 +281,31 @@ const Session = () => {
     }
   }, [isWriting])
 
-  const handleSceneAction = () => {}
-  const handleActionAction = () => {}
-  const handleCharacterAction = () => {}
-  const handleDialogueAction = () => {}
-  const handleTransitionAction = () => {}
+  // SCENE — player deletes "INT." or "EXT." and types their location and time
+  const handleSceneAction = () => {
+    editorRef.current?.insertHTML(`<p style="text-align:center"><b>INT. / EXT. &nbsp;[LOCATION] - [DAY / NIGHT]</b></p>`)
+  }
+
+  // ACTION — inserts a blank centered line for the player to write the action
+  const handleActionAction = () => {
+    editorRef.current?.insertHTML(`<p style="text-align:center">[ACTION]</p>`)
+  }
+
+  // CHARACTER — player overwrites the placeholder with the character's name
+  const handleCharacterAction = () => {
+    editorRef.current?.insertHTML(`<p style="text-align:center"><b>[CHARACTER NAME]</b></p>`)
+  }
+
+  // DIALOGUE — player overwrites the placeholder with the spoken line
+  const handleDialogueAction = () => {
+    editorRef.current?.insertHTML(`<p style="text-align:center">[DIALOGUE]</p>`)
+  }
+
+  // TRANSITION — player overwrites with e.g. CUT TO:, FADE OUT., DISSOLVE TO:
+  const TRANSITION_OPTIONS = ['CUT TO:', 'FADE OUT.', 'SMASH CUT TO:', 'DISSOLVE TO:', 'MATCH CUT TO:']
+  const handleTransitionAction = () => {
+    editorRef.current?.insertHTML(`<p style="text-align:center"><b>${pick(TRANSITION_OPTIONS)}</b></p>`)
+  }
 
   const ACTION_HANDLERS = {
     SCENE:      handleSceneAction,
@@ -297,7 +318,7 @@ const Session = () => {
   const handleSelectAction = (action) => {
     setSelectedAction(action)
     setShowActionPrompt(false)
-    setCurrentContent(prev => prev + `[${action.label.toUpperCase()}] `)
+    // Delegates entirely to the ACTION_HANDLERS above — no plain text appended here anymore
     ACTION_HANDLERS[action.tag]?.()
   }
 
@@ -306,7 +327,7 @@ const Session = () => {
     if(prevPhaseRef.current !== phaseIndex){
       const prevPhase = PHASES[prevPhaseRef.current]
       if(prevPhase.label === 'Writing'){
-        setLockedContent(prev => prev + currentContent)
+        setLockedContent(prev => prev + '<div>' + currentContent + '</div>')
         setCurrentContent("")
       }
       if(phase.label === 'Writing'){
@@ -364,12 +385,13 @@ const Session = () => {
 
   const handleGenerateStoryboard = ()=>{ setShowStoryboard(true) }
 
-  const insertTag = (tag) => setCurrentContent(prev => prev + `[${tag}] `)
-  const handleScene = () => insertTag('SCENE')
-  const handleAction = () => insertTag('ACTION')
-  const handleCharacter = () => insertTag('CHARACTER')
-  const handleDialogue = () => insertTag('DIALOGUE')
-  const handleTransition = () => insertTag('TRANSITION')
+  // ── Bottom toolbar buttons — mirror the ACTION_HANDLERS above ──────────────
+  // These call the same handler functions so edits only need to happen in one place
+  const handleScene      = () => handleSceneAction()
+  const handleAction     = () => handleActionAction()
+  const handleCharacter  = () => handleCharacterAction()
+  const handleDialogue   = () => handleDialogueAction()
+  const handleTransition = () => handleTransitionAction()
 
   // ── Show waiting room until session is started ──
   if (!sessionStarted) {
@@ -437,6 +459,7 @@ const Session = () => {
         <>
           <div className="absolute bottom-0 z-10 px-3 py-0 rounded-lg font-mono">
             <DocumentWindow
+              ref={editorRef}
               lockedContent={lockedContent}
               currentContent={currentContent}
               onContentChange={setCurrentContent}
