@@ -1,212 +1,74 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { assets } from "../assets/assets.js"
 import { useNavigate, useParams } from 'react-router-dom'
 import DocumentWindow from '../components/DocumentWindow';
 import WaitingRoom from '../components/WaitingRoom.jsx'
-import { useAuth } from '@clerk/clerk-react'
-
-const ROUND_DURATION_MS = 5000
-const WRITING_DURATION_MS = 5 * 60 * 1000
-const REST_DURATION_MS = 5000
-const GAME_DURATION_SEC = 15 * 60
-const ROUND_DURATION_SEC = 5 * 60
-
-const TURN_DURATION_SEC = 30
-const ACTION_PROMPT_SEC = 5
-
-const MIN_PLAYERS = 2
-
-// Mock player list — replace with real multiplayer data
-const MOCK_PLAYERS = ['Alice', 'Bob', 'Charlie', 'Diana']
-
-const SCREENPLAY_ACTIONS = [
-  { label: 'Scene',      tag: 'SCENE'},
-  { label: 'Action',     tag: 'ACTION'},
-  { label: 'Character',  tag: 'CHARACTER'},
-  { label: 'Dialogue',   tag: 'DIALOGUE'},
-  { label: 'Transition', tag: 'TRANSITION'},
-]
-
-const PHASES = [
-  { label: 'Act 1 Start', duration: ROUND_DURATION_MS },
-  { label: 'Writing', duration: WRITING_DURATION_MS },
-  { label: 'Act 1 End', duration: ROUND_DURATION_MS },
-  { label: 'Rest Period', duration: REST_DURATION_MS },
-  { label: 'Act 2 Start', duration: ROUND_DURATION_MS },
-  { label: 'Writing', duration: WRITING_DURATION_MS },
-  { label: 'Act 2 End', duration: ROUND_DURATION_MS },
-  { label: 'Rest Period', duration: REST_DURATION_MS },
-  { label: 'Act 3 Start', duration: ROUND_DURATION_MS },
-  { label: 'Writing', duration: WRITING_DURATION_MS },
-  { label: 'Act 3 End', duration: ROUND_DURATION_MS },
-  { label: 'The End', duration: REST_DURATION_MS },
-]
-
-const StarRating = ({ rating, onRate, hoveredStar, onHover, size = "6xl" }) => (
-  <div className="flex gap-2 justify-center" onMouseLeave={() => onHover && onHover(0)}>
-    {[1,2,3,4,5].map((star)=>{
-      const filled = (hoveredStar || rating) >= star
-      return (
-        <span
-          key={star}
-          className={`${onRate ? 'cursor-pointer' : ''} text-${size} leading-none transition-colors duration-150 ${filled ? 'text-sky-300' : 'text-white/40'}`}
-          onMouseEnter={()=>onHover && onHover(star)}
-          onClick={()=>onRate && onRate(star)}
-        >
-          {filled ? '★' : '☆'}
-        </span>
-      )
-    })}
-  </div>
-)
-
-// ─── Turn Action Prompt Modal ────────────────────────────────────────────────
-const ActionPrompt = ({ playerName, isMyTurn, onSelectAction, timeLeft, turnTimeLeft }) => {
-  const urgency = turnTimeLeft <= 10
-
-  if (!isMyTurn) {
-    return (
-      <div
-        className="fixed right-8 top-1/2 z-50 -translate-y-1/2 flex items-center gap-4 px-5 py-3 rounded-2xl shadow-xl"
-        style={{
-          background: 'rgba(10,10,20,0.85)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          backdropFilter: 'blur(10px)',
-        }}
-      >
-        <span className="w-2.5 h-2.5 rounded-full bg-white/40 animate-pulse" />
-        <span className="text-white/80 text-sm font-medium">
-          Waiting for <span className="text-white font-bold">{playerName}</span> to pick an action…
-        </span>
-        <TurnTimerRing seconds={turnTimeLeft} total={TURN_DURATION_SEC} urgency={urgency} />
-      </div>
-    )
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[14vh]">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div
-        className="relative z-10 w-[520px] rounded-2xl overflow-hidden shadow-2xl"
-        style={{
-          background: 'linear-gradient(135deg, rgba(15,15,25,0.97) 0%, rgba(30,20,50,0.97) 100%)',
-          border: '1px solid rgba(255,255,255,0.12)',
-        }}
-      >
-        <div
-          className="px-6 pt-5 pb-4 flex items-center justify-between"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
-        >
-          <div>
-            <p className="text-white/50 text-xs uppercase tracking-widest mb-1">Your Turn</p>
-            <h2 className="text-white font-bold text-xl">Choose your next move</h2>
-          </div>
-          <TurnTimerRing seconds={turnTimeLeft} total={TURN_DURATION_SEC} urgency={urgency} />
-        </div>
-        <div className="p-5 grid grid-cols-1 gap-2">
-          {SCREENPLAY_ACTIONS.map((action) => (
-            <button
-              key={action.tag}
-              onClick={() => onSelectAction(action)}
-              className="group flex items-center gap-4 px-5 py-3.5 rounded-xl text-left transition-all duration-200 hover:scale-[1.02] cursor-pointer"
-              style={{
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.08)',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = 'rgba(125,211,252,0.15)'
-                e.currentTarget.style.borderColor = 'rgba(125,211,252,0.4)'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
-              }}
-            >
-              <span className="text-2xl w-8 text-center">{action.icon}</span>
-              <div className="flex-1">
-                <span className="text-white font-semibold tracking-wide">[{action.label}]</span>
-                <span className="text-white/40 text-sm ml-3">{action.desc}</span>
-              </div>
-              <span className="text-sky-300/0 group-hover:text-sky-300/80 text-lg transition-all duration-200">→</span>
-            </button>
-          ))}
-        </div>
-        <div className="h-1 w-full bg-white/10 relative overflow-hidden">
-          <div
-            className={`h-full transition-all duration-1000 ease-linear ${urgency ? 'bg-red-500' : 'bg-sky-300'}`}
-            style={{ width: `${(turnTimeLeft / TURN_DURATION_SEC) * 100}%` }}
-          />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const TurnTimerRing = ({ seconds, total, urgency }) => {
-  const r = 22
-  const circ = 2 * Math.PI * r
-  const progress = (seconds / total) * circ
-  return (
-    <div className="relative w-14 h-14 flex items-center justify-center">
-      <svg className="absolute inset-0 -rotate-90" width="56" height="56">
-        <circle cx="28" cy="28" r={r} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="3" />
-        <circle
-          cx="28" cy="28" r={r} fill="none"
-          stroke={urgency ? '#ef4444' : '#7dd3fc'}
-          strokeWidth="3"
-          strokeDasharray={`${progress} ${circ}`}
-          strokeLinecap="round"
-          style={{ transition: 'stroke-dasharray 1s linear, stroke 0.5s' }}
-        />
-      </svg>
-      <span className={`font-mono font-bold text-sm ${urgency ? 'text-red-400' : 'text-white'}`}>
-        {seconds}
-      </span>
-    </div>
-  )
-}
-
-const TurnHUD = ({ playerName, isMyTurn, turnTimeLeft }) => (
-  <div
-    className="absolute top-7 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2 rounded-full"
-    style={{
-      background: 'rgba(0,0,0,0.7)',
-      border: isMyTurn ? '1px solid rgba(125,211,252,0.6)' : '1px solid rgba(255,255,255,0.15)',
-      backdropFilter: 'blur(8px)',
-    }}
-  >
-    <span className={`w-2 h-2 rounded-full animate-pulse ${isMyTurn ? 'bg-sky-300' : 'bg-white/40'}`} />
-    <span className="text-white text-sm font-medium">
-      {isMyTurn ? <span className="text-sky-300 font-bold">Your turn</span> : <><span className="text-white/60">{playerName}'s turn</span></>}
-    </span>
-    <span className="font-mono text-xs text-white/50 ml-1">{turnTimeLeft}s</span>
-  </div>
-)
+import StarRating from '../components/StarRating.jsx'
+import ActionPrompt from '../components/ActionPrompt.jsx'
+import TurnHUD from '../components/TurnHUD.jsx'
+import { socket } from "../socket"
+import { useUser } from '@clerk/clerk-react'
+import { store } from '../store/store.js'
+import {
+  GAME_DURATION_SEC,
+  ROUND_DURATION_SEC,
+  TURN_DURATION_SEC,
+  MIN_PLAYERS,
+  MOCK_PLAYERS,
+  PHASES
+} from '../components/sessionConstants.js'
 
 // ─── Main Session Component ──────────────────────────────────────────────────
-const Session = ({ socket }) => {
+const Session = () => {
 
   const navigate = useNavigate()
   const { sessionCode } = useParams()
-  const { userId } = useAuth()
+  const { user } = useUser()
 
   // ── Waiting room state ──
   // In a real app, `joinedPlayers` would come from your backend/socket.
   // Here we simulate players joining every 3 seconds for demo purposes.
-  const [joinedPlayers, setJoinedPlayers] = useState(['Alice'])
+  const [joinedPlayers, setJoinedPlayers] = useState([])
   const [sessionStarted, setSessionStarted] = useState(false)
   const IS_HOST = true // simulate: current user is the host
 
-  // Simulate a second player joining after 3 seconds (remove in production)
-//   useEffect(() => {
-//     if (sessionStarted) return
-//     const t = setTimeout(() => {
-//       setJoinedPlayers(prev =>
-//         prev.includes('Bob') ? prev : [...prev, 'Bob']
-//       )
-//     }, 3000)
-//     return () => clearTimeout(t)
-//   }, [sessionStarted])
+  const updatePlayers = store((state) => state.setSession)
+  const addPlayer = store((state) => state.addPlayer)
+
+  // Websocket Connection
+  useEffect(() => {
+    if (!user) return // ✅ wait for user
+
+    // ✅ Connect if not already
+    if (!socket.connected) {
+      socket.connect()
+    }
+
+    // ✅ Join session (important if user refreshes page)
+    socket.emit("join_session", {
+      sessionCode,
+      userId: user?.id
+    })
+
+    // ✅ Listen for events
+    socket.on("players_updated", (players) => {
+      console.log("Players:", players)
+        store.getState().setSession({
+            ...store.getState().session,
+            players
+        })
+    })
+
+    socket.on("session_started", () => {
+        console.log("Session started")
+    })
+
+    // 🧹 Cleanup listeners ONLY (not disconnect)
+    return () => {
+        socket.off("players_updated")
+        socket.off("session_started")
+      }
+  }, [sessionCode])
 
   const handleStartSession = () => {
     if (joinedPlayers.length >= MIN_PLAYERS) {
@@ -401,7 +263,6 @@ const Session = ({ socket }) => {
         players={joinedPlayers}
         onStart={handleStartSession}
         isHost={IS_HOST}
-        socket={socket}
       />
     )
   }

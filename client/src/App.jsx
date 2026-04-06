@@ -12,28 +12,9 @@ import ExampleDocumentWriter from './pages/ExampleDocumentWriter'
 import Layout from './pages/Layout'
 import { useUser } from '@clerk/clerk-react'
 import { Toaster } from 'react-hot-toast'
-import { io } from 'socket.io-client'
 
 const App = () => {
     const { user } = useUser()
-    const [socket, setSocket] = useState(null)
-
-    useEffect(() => {
-        // Only connect if user is logged in
-        if (user) {
-            const newSocket = io(import.meta.env.VITE_BASE_URL) // Replace with your server URL
-            setSocket(newSocket)
-
-            // Optional: handle global socket events
-            newSocket.on('connect', () => {
-                console.log('Connected to socket server:', newSocket.id)
-            })
-
-            return () => {
-                newSocket.disconnect()
-            }
-        }
-    }, [user])
 
     console.log("User:", user)
 
@@ -46,7 +27,7 @@ const App = () => {
                     <Route path='/gallery' element={<Gallery/>}/>
                     <Route path='/host_session' element={<HostSession/>}/>
                     <Route path='/join_session' element={<JoinSession/>}/>
-                    <Route path="/session/:sessionCode" element={<Session socket={socket}/>}/>
+                    <Route path="/session/:sessionCode" element={<Session/>}/>
                     <Route path="/doc" element={<ExampleDocumentWriter/>}/>
                     {/* <Route path="*" element={<Navigate to="/" replace />} /> */}
                 </Route>

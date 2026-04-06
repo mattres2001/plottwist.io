@@ -5,7 +5,7 @@ const MIN_PLAYERS = 2
 const MAX_PLAYERS = 4
 
 // ─── Waiting Room ────────────────────────────────────────────────────────────
-const WaitingRoom = ({ sessionCode, players, onStart, isHost, socket }) => {
+const WaitingRoom = ({ sessionCode, players, onStart, isHost }) => {
   const canStart = players.length >= MIN_PLAYERS
   const [dots, setDots] = useState('')
 

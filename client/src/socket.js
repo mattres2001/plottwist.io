@@ -1,10 +1,11 @@
 import { io } from 'socket.io-client'
 
-export const socket = io('http://localhost:4000', {
-    transports: ['websocket']
+export const socket = io(import.meta.env.VITE_BASEURL, {
+    transports: ['websocket'],
+    autoConnect: false // 👈 important
 });
 
-// 🔥 ADD THESE
+// Debug logs
 socket.on("connect", () => {
     console.log("✅ Connected:", socket.id);
 });
