@@ -1,16 +1,17 @@
 import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
-import connectDB from './configs/db.js'
+import connectDB from './configs/db.js';
 import { inngest, functions } from './inngest/index.js';
 import { serve } from 'inngest/express';
 import { clerkMiddleware } from '@clerk/express';
-import sessionRouter from './routes/sessionRoutes.js'
-import http from 'http'
-import { Server } from 'socket.io'
+import sessionRouter from './routes/sessionRoutes.js';
+import userRouter from './routes/userRoutes.js';
+import http from 'http';
+import { Server } from 'socket.io';
 
 const app = express();
-const server = http.createServer(app)
+const server = http.createServer(app);
 
 const PORT = process.env.PORT || 4000;
 
@@ -49,6 +50,7 @@ app.use(clerkMiddleware());
 app.get('/', (req, res) => res.send("Server is running"));
 app.use('/api/inngest', serve({ client: inngest, functions }));
 app.use('/api/session', sessionRouter);
+app.use('/api/users', userRouter);
 
 // Start server AFTER DB connects
 const startServer = async () => {
