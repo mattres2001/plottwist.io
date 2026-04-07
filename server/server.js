@@ -44,8 +44,7 @@ io.on("connection", (socket) => {
         const exists = session.players.find(p => p.userId === userId);
         if (!exists) {
             session.players.push({
-                userId,
-                socketId: socket.id
+                userId
             });
         }
 
@@ -93,7 +92,7 @@ io.on("connection", (socket) => {
 
     // ─── DISCONNECT ───────────────────────────
     socket.on("disconnect", () => {
-        console.log("User disconnected:", socket.id);
+        console.log("User disconnected, socket:", socket.id);
 
         for (const code in sessions) {
             const session = sessions[code];

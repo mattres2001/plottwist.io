@@ -30,22 +30,6 @@ const HostSession = () => {
                     const newSession = data.newSession
                     setSession(newSession)
 
-                    const payload = {
-                        sessionCode: newSession.code,
-                        userId: user?.id
-                    }
-
-                    // ✅ Ensure connection before emit
-                    if (!socket.connected) {
-                        socket.connect()
-
-                        socket.once("connect", () => {
-                            socket.emit("join_session", payload)
-                        })
-                    } else {
-                        socket.emit("join_session", payload)
-                    }
-
                     navigate(`/session/${newSession.code}`)
                 } else {
                     toast.error(data.message)

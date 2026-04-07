@@ -53,10 +53,10 @@ const Session = () => {
     // ✅ Listen for events
     socket.on("players_updated", (players) => {
       console.log("Players:", players)
-        store.getState().setSession({
-            ...store.getState().session,
-            players
-        })
+      store.getState().setSession({
+          ...store.getState().session,
+          players
+      })
     })
 
     socket.on("session_started", () => {

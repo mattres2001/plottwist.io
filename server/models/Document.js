@@ -6,7 +6,8 @@ const documentSchema = new mongoose.Schema({
     sessionId: {type: String, ref: 'Session', required: true},
     promptId: {type: String, ref: 'Prompt'},
     title: {type: String},
-    content: {type: String}
+    content: {type: String},
+    isPublished: {type: Boolean}
 }, {timestamps: true, minimize: false});
 
 const Document = mongoose.model('Document', documentSchema);
