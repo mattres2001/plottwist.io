@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { assets } from "../assets/assets.js"
 
 const MIN_PLAYERS = 2
 const MAX_PLAYERS = 4
 
-// ─── Waiting Room ────────────────────────────────────────────────────────────
 const WaitingRoom = ({ sessionCode, players, onStart, isHost }) => {
   const canStart = players.length >= MIN_PLAYERS
   const [dots, setDots] = useState('')
+  const navigate = useNavigate()
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -37,7 +38,6 @@ const WaitingRoom = ({ sessionCode, players, onStart, isHost }) => {
       </div>
 
       <div className="relative z-10 flex flex-col items-center gap-8 w-full max-w-lg px-4">
-
         <div className="text-center">
           <h1 className="text-white font-bold text-4xl tracking-tight drop-shadow-lg">
             Waiting for players to join{dots}
@@ -121,7 +121,8 @@ const WaitingRoom = ({ sessionCode, players, onStart, isHost }) => {
                     </>
                   ) : (
                     <>
-                      <div className="w-8 h-8 rounded-full flex-shrink-0"
+                      <div
+                        className="w-8 h-8 rounded-full flex-shrink-0"
                         style={{ background: 'rgba(255,255,255,0.04)', border: '1px dashed rgba(255,255,255,0.1)' }}
                       />
                       <span className="text-white/20 text-sm italic">
@@ -135,7 +136,6 @@ const WaitingRoom = ({ sessionCode, players, onStart, isHost }) => {
           </div>
         </div>
 
-        {/* Start button — host only */}
         {isHost ? (
           <button
             onClick={canStart ? onStart : undefined}
@@ -153,7 +153,9 @@ const WaitingRoom = ({ sessionCode, players, onStart, isHost }) => {
               boxShadow: canStart ? '0 4px 24px rgba(125,211,252,0.3)' : 'none',
             }}
           >
-            {canStart ? 'Start Session →' : `Waiting for ${MIN_PLAYERS - players.length} more player${MIN_PLAYERS - players.length !== 1 ? 's' : ''}…`}
+            {canStart
+              ? 'Start Session →'
+              : `Waiting for ${MIN_PLAYERS - players.length} more player${MIN_PLAYERS - players.length !== 1 ? 's' : ''}…`}
           </button>
         ) : (
           <div
@@ -166,6 +168,18 @@ const WaitingRoom = ({ sessionCode, players, onStart, isHost }) => {
             Waiting for host to start{dots}
           </div>
         )}
+
+        <button
+          onClick={() => navigate('/')}
+          className="w-full py-3 rounded-xl font-semibold text-white transition-all duration-300"
+          style={{
+            background: 'rgba(255,255,255,0.08)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          Back to Home
+        </button>
       </div>
     </div>
   )
