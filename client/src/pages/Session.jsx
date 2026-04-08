@@ -28,12 +28,16 @@ const Session = () => {
   // ── Waiting room state ──
   // In a real app, `joinedPlayers` would come from your backend/socket.
   // Here we simulate players joining every 3 seconds for demo purposes.
-  const [joinedPlayers, setJoinedPlayers] = useState([])
+  // const [joinedPlayers, setJoinedPlayers] = useState([])
   const [sessionStarted, setSessionStarted] = useState(false)
   const IS_HOST = true // simulate: current user is the host
 
   const updatePlayers = store((state) => state.setSession)
   const addPlayer = store((state) => state.addPlayer)
+  const players = store((state) => state.session?.players || [])
+
+  console.log("USER OBJECT:", user)
+  console.log("USERNAME FIELD:", user.username)
 
   // Websocket Connection
   useEffect(() => {
@@ -47,16 +51,22 @@ const Session = () => {
     // ✅ Join session (important if user refreshes page)
     socket.emit("join_session", {
       sessionCode,
-      userId: user?.id
+      userId: user?.id,
+      username: user?.username
     })
 
     // ✅ Listen for events
     socket.on("players_updated", (players) => {
-      console.log("Players:", players)
+      const current = store.getState().session
+
+      console.log("📦 BEFORE:", current)
+
       store.getState().setSession({
-          ...store.getState().session,
-          players
+        ...current,
+        players
       })
+
+      console.log("📦 AFTER:", store.getState().session)
     })
 
     socket.on("session_started", () => {
@@ -71,7 +81,7 @@ const Session = () => {
   }, [sessionCode])
 
   const handleStartSession = () => {
-    if (joinedPlayers.length >= MIN_PLAYERS) {
+    if (players.length >= MIN_PLAYERS) {
       setSessionStarted(true)
     }
   }
@@ -260,7 +270,7 @@ const Session = () => {
     return (
       <WaitingRoom
         sessionCode={sessionCode}
-        players={joinedPlayers}
+        players={players}
         onStart={handleStartSession}
         isHost={IS_HOST}
       />

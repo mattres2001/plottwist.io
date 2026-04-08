@@ -16,6 +16,10 @@ const WaitingRoom = ({ sessionCode, players, onStart, isHost }) => {
     return () => clearInterval(interval)
   }, [])
 
+  useEffect(() => {
+    console.log(players)
+  }, [])
+
   return (
     <div className="relative h-screen w-screen flex items-center justify-center overflow-hidden">
       <img
@@ -103,10 +107,10 @@ const WaitingRoom = ({ sessionCode, players, onStart, isHost }) => {
                           color: isYou ? '#7dd3fc' : 'rgba(255,255,255,0.7)',
                         }}
                       >
-                        {player[0].toUpperCase()}
+                        {player?.username?.[0]?.toUpperCase() || "?"}
                       </div>
                       <span className={`font-medium text-sm ${isYou ? 'text-sky-300' : 'text-white/80'}`}>
-                        {player}
+                        {player.username}
                       </span>
                       {isYou && (
                         <span className="ml-auto text-sky-300/50 text-xs font-mono uppercase tracking-wider">

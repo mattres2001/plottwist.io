@@ -28,7 +28,7 @@ io.on("connection", (socket) => {
     console.log("Socket connected:", socket.id);
 
     // ─── JOIN SESSION ─────────────────────────
-    socket.on("join_session", ({ sessionCode, userId }) => {
+    socket.on("join_session", ({ sessionCode, userId, username }) => {
         console.log(`${userId} joining ${sessionCode}`);
 
         if (!sessions[sessionCode]) {
@@ -44,7 +44,8 @@ io.on("connection", (socket) => {
         const exists = session.players.find(p => p.userId === userId);
         if (!exists) {
             session.players.push({
-                userId
+                userId,
+                username
             });
         }
 
