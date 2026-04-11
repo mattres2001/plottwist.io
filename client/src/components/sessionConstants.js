@@ -1,5 +1,8 @@
+// Note: this does not effect Session.jsx, this is for other components
+// Session.jsx has its own constants 
+
 export const ROUND_DURATION_MS = 5000
-export const WRITING_DURATION_MS = 0.0 * 60 * 1000
+export const WRITING_DURATION_MS = 5 * 60 * 1000
 export const REST_DURATION_MS = 5000
 export const GAME_DURATION_SEC = 15 * 60
 export const ROUND_DURATION_SEC = 5 * 60
