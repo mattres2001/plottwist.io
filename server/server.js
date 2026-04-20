@@ -15,6 +15,7 @@ const server = http.createServer(app);
 
 const PORT = process.env.PORT || 4000;
 
+// Websocket server
 const io = new Server(server, {
     cors: {
         origin: 'http://localhost:5173',
@@ -22,16 +23,102 @@ const io = new Server(server, {
     }
 });
 
-io.on("connection", (socket) => {
-    console.log("User connected:", socket.id);
+const sessions = {};
 
-    socket.on("join_session", (code) => {
-        socket.join(code);
-        console.log(`Socket joined room: ${code}`);
+io.on("connection", (socket) => {
+    console.log("Socket connected:", socket.id);
+
+    // ─── JOIN SESSION ─────────────────────────
+    socket.on("join_session", ({ sessionCode, userId, username }) => {
+        console.log(`${userId} joining ${sessionCode}`);
+
+        if (!sessions[sessionCode]) {
+            sessions[sessionCode] = {
+                players: [],
+                hostId: userId,
+            };
+        }
+
+        const session = sessions[sessionCode];
+
+        // prevent duplicate users
+        const exists = session.players.find(p => p.userId === userId);
+        if (!exists) {
+            session.players.push({
+                userId,
+                username,
+                socketId: socket.id
+            });
+        }
+
+        socket.join(sessionCode);
+
+        // send updated players
+        io.to(sessionCode).emit(
+            "players_updated",
+            session.players
+        );
     });
 
+    // ─── LEAVE SESSION ────────────────────────
+    socket.on("leave_session", ({ sessionCode, userId }) => {
+        console.log(`${userId} leaving ${sessionCode}`);
+
+        const session = sessions[sessionCode];
+        if (!session) return;
+
+        session.players = session.players.filter(
+            p => p.userId !== userId
+        );
+
+        socket.leave(sessionCode);
+
+        io.to(sessionCode).emit(
+            "players_updated",
+            session.players
+        );
+
+        if (session.players.length === 0) {
+            delete sessions[sessionCode];
+        }
+    });
+
+    // ─── START SESSION ────────────────────────
+    socket.on("start_session", (sessionCode) => {
+        console.log("Starting session:", sessionCode);
+
+        const session = sessions[sessionCode];
+        if (!session) return;
+
+        io.to(sessionCode).emit("session_started");
+    });
+
+    // ─── DISCONNECT ───────────────────────────
     socket.on("disconnect", () => {
-        console.log("User disconnected:", socket.id);
+        console.log("User disconnected, socket:", socket.id);
+
+        for (const code in sessions) {
+            const session = sessions[code];
+
+            const player = session.players.find(
+                p => p.socketId === socket.id
+            );
+
+            if (player) {
+                session.players = session.players.filter(
+                    p => p.socketId !== socket.id
+                );
+
+                io.to(code).emit(
+                    "players_updated",
+                    session.players.map(p => p.userId)
+                );
+
+                if (session.players.length === 0) {
+                    delete sessions[code];
+                }
+            }
+        }
     });
 });
 
@@ -65,3 +152,4 @@ const startServer = async () => {
 };
 
 startServer();
+
