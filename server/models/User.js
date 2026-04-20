@@ -6,8 +6,11 @@ const userSchema = new mongoose.Schema({
     username: {type: String, unique: true},
     profile_picture: {type: String, default: ''},
     scriptId: {type: String, ref: 'Document'}
+    bio: { type: String, default: '' },
+    favoriteGenre: { type: String, default: '' },
+    location: { type: String, default: '' }
 }, {timestamps: true, minimize: false});
 
 const User = mongoose.model('User', userSchema);
 
-export default User
+export default User;
