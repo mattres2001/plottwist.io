@@ -74,12 +74,35 @@ const Session = () => {
         console.log("Session started")
     })
 
+    socket.on("turn_update", ({ currentTurnIndex, turnStartedAt, turnDuration }) => {
+      setCurrentPlayerIndex(currentTurnIndex);
+      turnStartedAtRef.current = turnStartedAt;
+
+      const elapsed = (Date.now() - turnStartedAt) / 1000;
+      setTurnTimeLeft(Math.ceil(turnDuration - elapsed));
+    });
+
     // 🧹 Cleanup listeners ONLY (not disconnect)
     return () => {
         socket.off("players_updated")
         socket.off("session_started")
       }
   }, [sessionCode])
+
+  useEffect(() => {
+    if (!sessionStarted) return;
+
+    const interval = setInterval(() => {
+      if (!turnStartedAtRef.current) return;
+
+      const elapsed = (Date.now() - turnStartedAtRef.current) / 1000;
+      const remaining = Math.max(0, TURN_DURATION_SEC - elapsed);
+
+      setTurnTimeLeft(Math.ceil(remaining));
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [sessionStarted]);
 
   const handleStartSession = () => {
     if (players.length >= MIN_PLAYERS) {
@@ -120,8 +143,10 @@ const Session = () => {
 
   const MY_PLAYER_INDEX = 0
   const isWriting = PHASES[phaseIndex]?.label === 'Writing'
-  const currentPlayer = MOCK_PLAYERS[currentPlayerIndex]
-  const isMyTurn = currentPlayerIndex === MY_PLAYER_INDEX
+  // const currentPlayer = MOCK_PLAYERS[currentPlayerIndex]
+  const currentPlayer = players[currentPlayerIndex]?.username
+  const myIndex = players.findIndex(p => p.userId === user.id)
+  const isMyTurn = currentPlayerIndex === myIndex
 
   const isRestRef = useRef(false)
   const prevPhaseRef = useRef(0)
@@ -137,25 +162,15 @@ const Session = () => {
     title:"Generated Storyboard"
   }
 
+  const turnStartedAtRef = useRef(null)
+
   useEffect(() => {
-    if (!isWriting || !sessionStarted) return
-    setShowActionPrompt(true)
-    const interval = setInterval(() => {
-      setTurnTimeLeft(prev => {
-        if (prev <= 1) {
-          setCurrentPlayerIndex(i => (i + 1) % MOCK_PLAYERS.length)
-          setSelectedAction(null)
-          setShowActionPrompt(true)
-          setShowSceneBuilder(false)
-          setShowCharacterBuilder(false)
-          setShowTransitionBuilder(false)
-          return TURN_DURATION_SEC
-        }
-        return prev - 1
-      })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [isWriting, currentPlayerIndex, sessionStarted])
+    if (!sessionStarted) return;
+    if (turnStartedAtRef.current == null) return;
+
+    setTurnTimeLeft(TURN_DURATION_SEC);
+    turnStartedAtRef.current = Date.now();
+  }, [currentPlayerIndex]);
 
   useEffect(() => {
     if (isWriting) {
@@ -251,7 +266,8 @@ const Session = () => {
   }
 
   const endTurn = () => {
-    setCurrentPlayerIndex(i => (i + 1) % MOCK_PLAYERS.length)
+    // setCurrentPlayerIndex(i => (i + 1) % MOCK_PLAYERS.length)
+    socket.emit("request_end_turn", { sessionCode })
     setSelectedAction(null)
     setShowActionPrompt(true)
     setTurnTimeLeft(TURN_DURATION_SEC)

@@ -9,6 +9,7 @@ import sessionRouter from './routes/sessionRoutes.js';
 import userRouter from './routes/userRoutes.js';
 import http from 'http';
 import { Server } from 'socket.io';
+import { TURN_DURATION_SEC } from '../client/src/components/sessionConstants.js'
 
 const app = express();
 const server = http.createServer(app);
@@ -25,6 +26,35 @@ const io = new Server(server, {
 
 const sessions = {};
 
+const startTurnLoop = (sessionCode) => {
+  const session = sessions[sessionCode];
+  if (!session) return;
+
+  const emitTurn = () => {
+    session.turnStartedAt = Date.now();
+
+    io.to(sessionCode).emit("turn_update", {
+      currentTurnIndex: session.currentTurnIndex,
+      turnStartedAt: session.turnStartedAt,
+      turnDuration: TURN_DURATION_SEC
+    });
+  };
+
+  emitTurn();
+
+  session.turnTimeout = setTimeout(function nextTurn() {
+    const session = sessions[sessionCode];
+    if (!session) return;
+
+    session.currentTurnIndex =
+      (session.currentTurnIndex + 1) % session.players.length;
+
+    emitTurn();
+
+    session.turnTimeout = setTimeout(nextTurn, TURN_DURATION_SEC * 1000);
+  }, TURN_DURATION_SEC * 1000);
+};
+
 io.on("connection", (socket) => {
     console.log("Socket connected:", socket.id);
 
@@ -36,6 +66,8 @@ io.on("connection", (socket) => {
             sessions[sessionCode] = {
                 players: [],
                 hostId: userId,
+                currentTurnIndex: 0,
+                turnStartedAt: Date.now()
             };
         }
 
@@ -67,9 +99,19 @@ io.on("connection", (socket) => {
         const session = sessions[sessionCode];
         if (!session) return;
 
+        const leavingIndex = session.players.findIndex(
+            p => p.userId === userId
+        );
+
         session.players = session.players.filter(
             p => p.userId !== userId
         );
+
+        // ✅ adjust turn index
+        if (leavingIndex <= session.currentTurnIndex) {
+            session.currentTurnIndex =
+                Math.max(0, session.currentTurnIndex - 1);
+        }
 
         socket.leave(sessionCode);
 
@@ -85,12 +127,14 @@ io.on("connection", (socket) => {
 
     // ─── START SESSION ────────────────────────
     socket.on("start_session", (sessionCode) => {
-        console.log("Starting session:", sessionCode);
-
         const session = sessions[sessionCode];
         if (!session) return;
 
+        session.currentTurnIndex = 0;
+
         io.to(sessionCode).emit("session_started");
+
+        startTurnLoop(sessionCode);
     });
 
     // ─── DISCONNECT ───────────────────────────
@@ -111,7 +155,7 @@ io.on("connection", (socket) => {
 
                 io.to(code).emit(
                     "players_updated",
-                    session.players.map(p => p.userId)
+                    session.players
                 );
 
                 if (session.players.length === 0) {
@@ -120,6 +164,19 @@ io.on("connection", (socket) => {
             }
         }
     });
+
+    // --- END TURN ------------------------
+    socket.on("request_end_turn", ({ sessionCode }) => {
+        const session = sessions[sessionCode];
+        if (!session) return;
+
+        clearTimeout(session.turnTimeout);
+
+        session.currentTurnIndex =
+            (session.currentTurnIndex + 1) % session.players.length;
+
+        startTurnLoop(sessionCode);
+    }); 
 });
 
 export { io };
