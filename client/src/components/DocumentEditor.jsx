@@ -45,6 +45,16 @@ const DocumentEditor = forwardRef(({ content, onChange }, ref) => {
             const insertedAt = sizeBefore
             editor.commands.setTextSelection(insertedAt + cursorOffset)
             editor.commands.unsetBold()
+        },
+
+        // Returns current HTML and resets the editor to blank.
+        // Used to move inserted action content into lockedContent immediately,
+        // making it undeletable by the user.
+        flushContent: () => {
+            if (!editor) return ''
+            const html = editor.getHTML()
+            editor.commands.setContent('<p></p>', false)
+            return html
         }
     }))
 
