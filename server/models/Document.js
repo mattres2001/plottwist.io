@@ -1,13 +1,15 @@
 import mongoose from 'mongoose';
 
-const userSchema = new mongoose.Schema({
+const documentSchema = new mongoose.Schema({
     _id: {type: String, required: true},
-    title: {type: String, required: true},
-    full_name: {type: String, required: true},
-    username: {type: String, unique: true},
-    profile_picture: {type: String, default: ''}
+    authorId: [{type: String, ref: 'User', required: true}],
+    sessionId: {type: String, ref: 'Session', required: true},
+    promptId: {type: String, ref: 'Prompt'},
+    title: {type: String},
+    content: {type: String},
+    isPublished: {type: Boolean}
 }, {timestamps: true, minimize: false});
 
-const User = mongoose.model('User', userSchema);
+const Document = mongoose.model('Document', documentSchema);
 
-export default User
+export default Document

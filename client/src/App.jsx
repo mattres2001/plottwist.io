@@ -1,4 +1,7 @@
-import { Route, Routes } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import reactLogo from './assets/react.svg'
+import viteLogo from '/vite.svg'
+import { Route, Routes, useNavigate } from 'react-router-dom'
 import Login from './pages/Login'
 import MainMenu from './pages/MainMenu'
 import Gallery from './pages/Gallery'
@@ -21,7 +24,7 @@ const HomeWithProfile = () => {
 }
 
 const App = () => {
-  const { user } = useUser()
+    const { user } = useUser()
 
   return (
     <>
