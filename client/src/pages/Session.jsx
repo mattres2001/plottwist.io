@@ -70,6 +70,7 @@ const Session = () => {
     })
 
     socket.on("session_started", () => {
+        setSessionStarted(true)
         console.log("Session started")
     })
 
@@ -82,7 +83,8 @@ const Session = () => {
 
   const handleStartSession = () => {
     if (players.length >= MIN_PLAYERS) {
-      setSessionStarted(true)
+      // setSessionStarted(true)
+      socket.emit("start_session", sessionCode)
     }
   }
 

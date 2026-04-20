@@ -45,7 +45,8 @@ io.on("connection", (socket) => {
         if (!exists) {
             session.players.push({
                 userId,
-                username
+                username,
+                socketId: socket.id
             });
         }
 
@@ -73,7 +74,7 @@ io.on("connection", (socket) => {
 
         io.to(sessionCode).emit(
             "players_updated",
-            session.players.map(p => p.userId)
+            session.players
         );
 
         if (session.players.length === 0) {
@@ -149,3 +150,4 @@ const startServer = async () => {
 };
 
 startServer();
+
