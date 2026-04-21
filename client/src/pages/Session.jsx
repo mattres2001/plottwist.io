@@ -77,9 +77,6 @@ const Session = () => {
     socket.on("turn_update", ({ currentTurnIndex, turnStartedAt, turnDuration }) => {
       setCurrentPlayerIndex(currentTurnIndex);
       turnStartedAtRef.current = turnStartedAt;
-
-      const elapsed = (Date.now() - turnStartedAt) / 1000;
-      setTurnTimeLeft(Math.ceil(turnDuration - elapsed));
     });
 
     // 🧹 Cleanup listeners ONLY (not disconnect)
@@ -110,6 +107,12 @@ const Session = () => {
       socket.emit("start_session", sessionCode)
     }
   }
+
+  const [structureState, setStructureState] = useState({
+    hasScene: false,
+    lastWasCharacter: false,
+    lastWasDialogue: false,
+  })
 
   const [showConfirm,setShowConfirm] = useState(false)
   const [phaseIndex,setPhaseIndex] = useState(0)
@@ -165,12 +168,18 @@ const Session = () => {
   const turnStartedAtRef = useRef(null)
 
   useEffect(() => {
-    if (!sessionStarted) return;
-    if (turnStartedAtRef.current == null) return;
+    if (!sessionStarted) return
+    if (!turnStartedAtRef.current) return
 
-    setTurnTimeLeft(TURN_DURATION_SEC);
-    turnStartedAtRef.current = Date.now();
-  }, [currentPlayerIndex]);
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - turnStartedAtRef.current) / 1000
+      const remaining = Math.max(0, TURN_DURATION_SEC - elapsed)
+      setTurnTimeLeft(Math.ceil(remaining))
+    }, 250)
+
+    return () => clearInterval(interval)
+  }, [sessionStarted, currentPlayerIndex])
+
 
   useEffect(() => {
     if (isWriting) {
@@ -204,6 +213,13 @@ const Session = () => {
     const dn = sceneDayNight || 'DAY'
     const loc = sceneLocation.trim() || 'LOCATION'
     editorRef.current?.insertHTML(`<p style="text-align:center"><b>${ie}. ${loc} - ${dn}</b></p>`)
+    
+    setStructureState({
+      hasScene: true,
+      lastWasCharacter: false,
+      lastWasDialogue: false,
+    })
+    
     setShowSceneBuilder(false)
     flushToLocked()
   }
@@ -214,6 +230,27 @@ const Session = () => {
     flushToLocked()
   }
 
+  const allowedActions = (() => {
+    // 1. If no scene exists → ONLY scene allowed
+    if (!structureState.hasScene) {
+      return ['SCENE']
+    }
+
+    // 2. If last was CHARACTER → ONLY dialogue allowed
+    if (structureState.lastWasCharacter) {
+      return ['DIALOGUE']
+    }
+
+    // 3. Dialogue can happen anytime after character, but not first
+    const base = ['SCENE', 'ACTION', 'CHARACTER', 'TRANSITION']
+
+    if (structureState.lastWasDialogue) {
+      return base // can continue normally after dialogue
+    }
+
+    return base
+  })()
+
   // CHARACTER — opens builder modal for player to type the character's name
   const handleCharacterAction = () => {
     setCharacterName('')
@@ -223,6 +260,13 @@ const Session = () => {
   const handleConfirmCharacter = () => {
     const name = characterName.trim() || 'CHARACTER NAME'
     editorRef.current?.insertHTML(`<p style="text-align:center"><b>${name.toUpperCase()}</b></p>`)
+
+    setStructureState(prev => ({
+      ...prev,
+      lastWasCharacter: true,
+      lastWasDialogue: false,
+    }))
+
     setShowCharacterBuilder(false)
     flushToLocked()
   }
@@ -230,6 +274,13 @@ const Session = () => {
   // DIALOGUE — player overwrites the placeholder with the spoken line
   const handleDialogueAction = () => {
     editorRef.current?.insertHTML(`<p style="text-align:center">DIALOGUE</p>`)
+
+    setStructureState(prev => ({
+      ...prev,
+      lastWasCharacter: false,
+      lastWasDialogue: true,
+    }))
+
     flushToLocked()
   }
 
@@ -259,6 +310,11 @@ const Session = () => {
   }
 
   const handleSelectAction = (action) => {
+    if (!allowedActions.includes(action.tag)) {
+      console.warn("Blocked illegal action:", action.tag)
+      return
+    }
+
     setSelectedAction(action)
     setShowActionPrompt(false)
     // Delegates entirely to the ACTION_HANDLERS above — no plain text appended here anymore
@@ -398,6 +454,7 @@ const Session = () => {
           isMyTurn={isMyTurn}
           onSelectAction={handleSelectAction}
           turnTimeLeft={turnTimeLeft}
+          allowedActions={allowedActions}
         />
       )}
 

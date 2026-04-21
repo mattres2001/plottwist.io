@@ -2,7 +2,7 @@ import React from 'react'
 import TurnTimerRing from './TurnTimerRing'
 import { SCREENPLAY_ACTIONS, TURN_DURATION_SEC } from './sessionConstants'
 
-const ActionPrompt = ({ playerName, isMyTurn, onSelectAction, turnTimeLeft }) => {
+const ActionPrompt = ({ playerName, isMyTurn, onSelectAction, turnTimeLeft, allowedActions }) => {
   const urgency = turnTimeLeft <= 10
 
   if (!isMyTurn) {
@@ -35,23 +35,43 @@ const ActionPrompt = ({ playerName, isMyTurn, onSelectAction, turnTimeLeft }) =>
           <TurnTimerRing seconds={turnTimeLeft} total={TURN_DURATION_SEC} urgency={urgency} />
         </div>
         <div className="p-5 grid grid-cols-1 gap-2">
-          {SCREENPLAY_ACTIONS.map((action) => (
-            <button
-              key={action.tag}
-              onClick={() => onSelectAction(action)}
-              className="group flex items-center gap-4 px-5 py-3.5 rounded-xl text-left transition-all duration-200 hover:scale-[1.02] cursor-pointer"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(125,211,252,0.15)'; e.currentTarget.style.borderColor = 'rgba(125,211,252,0.4)' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
-            >
-              <span className="text-2xl w-8 text-center">{action.icon}</span>
-              <div className="flex-1">
-                <span className="text-white font-semibold tracking-wide">[{action.label}]</span>
-                <span className="text-white/40 text-sm ml-3">{action.desc}</span>
-              </div>
-              <span className="text-sky-300/0 group-hover:text-sky-300/80 text-lg transition-all duration-200">→</span>
-            </button>
-          ))}
+          {SCREENPLAY_ACTIONS.map((action) => {
+            const isAllowed = allowedActions.includes(action.tag)
+            return (
+              <button
+                key={action.tag}
+                onClick={() => isAllowed && onSelectAction(action)}
+                disabled={!isAllowed}
+                className={`group flex items-center gap-4 px-5 py-3.5 rounded-xl text-left transition-all duration-200 ${
+                  !isAllowed ? 'opacity-40 cursor-not-allowed' : 'hover:scale-[1.02] cursor-pointer'
+                }`}
+                style={{
+                  background: isAllowed
+                    ? 'rgba(255,255,255,0.05)'
+                    : 'rgba(255,255,255,0.02)',
+                  border: isAllowed
+                    ? '1px solid rgba(255,255,255,0.08)'
+                    : '1px solid rgba(255,255,255,0.03)',
+                }}
+                onMouseEnter={e => {
+                  if (!isAllowed) return
+                  e.currentTarget.style.background = 'rgba(125,211,252,0.15)'
+                  e.currentTarget.style.borderColor = 'rgba(125,211,252,0.4)'
+                }}
+                onMouseLeave={e => {
+                  if (!isAllowed) return
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+                }}
+              >
+                <span className="text-2xl w-8 text-center">{action.icon}</span>
+                <div className="flex-1">
+                  <span className="text-white font-semibold tracking-wide">[{action.label}]</span>
+                  <span className="text-white/40 text-sm ml-3">{action.desc}</span>
+                </div>
+                <span className="text-sky-300/0 group-hover:text-sky-300/80 text-lg transition-all duration-200">→</span>
+              </button>
+          )})}
         </div>
         <div className="h-1 w-full bg-white/10 relative overflow-hidden">
           <div
