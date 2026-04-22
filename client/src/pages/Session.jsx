@@ -30,11 +30,13 @@ const Session = () => {
   // Here we simulate players joining every 3 seconds for demo purposes.
   // const [joinedPlayers, setJoinedPlayers] = useState([])
   const [sessionStarted, setSessionStarted] = useState(false)
-  const IS_HOST = true // simulate: current user is the host
 
   const updatePlayers = store((state) => state.setSession)
   const addPlayer = store((state) => state.addPlayer)
   const players = store((state) => state.session?.players || [])
+  const sessionHostId = store((state) => state.session?.hostId)
+
+  const IS_HOST = user?.id === sessionHostId
 
   console.log("USER OBJECT:", user)
   console.log("USERNAME FIELD:", user.username)
@@ -59,17 +61,13 @@ const Session = () => {
     socket.emit("request_state", { sessionCode })
 
     // ✅ Listen for events
-    socket.on("players_updated", (players) => {
+    socket.on("players_updated", ({ players, hostId }) => {
       const current = store.getState().session
-
-      console.log("📦 BEFORE:", current)
-
       store.getState().setSession({
         ...current,
-        players
+        players,
+        hostId: hostId ?? current.hostId
       })
-
-      console.log("📦 AFTER:", store.getState().session)
     })
 
     socket.on("session_started", () => {
@@ -96,7 +94,11 @@ const Session = () => {
     })
 
     // Full state sync on reconnect or late join
-    socket.on("state_sync", ({ moves, isActive, currentTurnIndex, turnStartedAt }) => {
+    socket.on("state_sync", ({ moves, isActive, currentTurnIndex, turnStartedAt, hostId }) => {
+      if (hostId) {
+        const current = store.getState().session
+        store.getState().setSession({ ...current, hostId })
+      }
       if (moves.length > 0) {
         setLockedContent(moves.map(m => m.content).join(''))
         // Replay move history to reconstruct the allowed-actions structure

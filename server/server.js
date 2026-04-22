@@ -87,10 +87,10 @@ io.on("connection", (socket) => {
 
         socket.join(sessionCode);
 
-        // send updated players
+        // send updated players + hostId so every client knows who the host is
         io.to(sessionCode).emit(
             "players_updated",
-            session.players
+            { players: session.players, hostId: session.hostId }
         );
     });
 
@@ -119,7 +119,7 @@ io.on("connection", (socket) => {
 
         io.to(sessionCode).emit(
             "players_updated",
-            session.players
+            { players: session.players, hostId: session.hostId }
         );
 
         if (session.players.length === 0) {
@@ -158,7 +158,7 @@ io.on("connection", (socket) => {
 
                 io.to(code).emit(
                     "players_updated",
-                    session.players
+                    { players: session.players, hostId: session.hostId }
                 );
 
                 if (session.players.length === 0) {
@@ -227,7 +227,8 @@ io.on("connection", (socket) => {
                 moves,
                 isActive: !!session?.started,
                 currentTurnIndex: session?.currentTurnIndex ?? 0,
-                turnStartedAt: session?.turnStartedAt ?? Date.now()
+                turnStartedAt: session?.turnStartedAt ?? Date.now(),
+                hostId: session?.hostId ?? null
             });
         } catch (err) {
             console.error("request_state error:", err);
