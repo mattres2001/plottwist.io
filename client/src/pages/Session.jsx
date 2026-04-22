@@ -55,6 +55,9 @@ const Session = () => {
       username: user?.username
     })
 
+    // Request full document state — handles reconnects and late joins
+    socket.emit("request_state", { sessionCode })
+
     // ✅ Listen for events
     socket.on("players_updated", (players) => {
       const current = store.getState().session
@@ -79,10 +82,48 @@ const Session = () => {
       turnStartedAtRef.current = turnStartedAt;
     });
 
+    // Another player submitted a move — append their content and sync structure state
+    socket.on("move_broadcast", ({ type, content }) => {
+      setLockedContent(prev => prev + content)
+      setStructureState(prev => {
+        switch (type) {
+          case 'SCENE': return { hasScene: true, lastWasCharacter: false, lastWasDialogue: false }
+          case 'CHARACTER': return { ...prev, lastWasCharacter: true, lastWasDialogue: false }
+          case 'DIALOGUE': return { ...prev, lastWasCharacter: false, lastWasDialogue: true }
+          default: return prev
+        }
+      })
+    })
+
+    // Full state sync on reconnect or late join
+    socket.on("state_sync", ({ moves, isActive, currentTurnIndex, turnStartedAt }) => {
+      if (moves.length > 0) {
+        setLockedContent(moves.map(m => m.content).join(''))
+        // Replay move history to reconstruct the allowed-actions structure
+        let structure = { hasScene: false, lastWasCharacter: false, lastWasDialogue: false }
+        for (const move of moves) {
+          switch (move.type) {
+            case 'SCENE': structure = { hasScene: true, lastWasCharacter: false, lastWasDialogue: false }; break
+            case 'CHARACTER': structure = { ...structure, lastWasCharacter: true, lastWasDialogue: false }; break
+            case 'DIALOGUE': structure = { ...structure, lastWasCharacter: false, lastWasDialogue: true }; break
+          }
+        }
+        setStructureState(structure)
+      }
+      if (isActive) {
+        setSessionStarted(true)
+        setCurrentPlayerIndex(currentTurnIndex)
+        turnStartedAtRef.current = turnStartedAt
+      }
+    })
+
     // 🧹 Cleanup listeners ONLY (not disconnect)
     return () => {
         socket.off("players_updated")
         socket.off("session_started")
+        socket.off("turn_update")
+        socket.off("move_broadcast")
+        socket.off("state_sync")
       }
   }, [sessionCode])
 
@@ -192,12 +233,19 @@ const Session = () => {
     }
   }, [isWriting])
 
-  // Moves whatever is currently in the editor into lockedContent, making it permanent
-  const flushToLocked = () => {
+  // Moves whatever is currently in the editor into lockedContent, making it permanent,
+  // then broadcasts the move to all other players in the session.
+  const flushToLocked = (actionType) => {
     setTimeout(() => {
       const html = editorRef.current?.flushContent()
       if (html && html !== '<p></p>' && html !== '<p></p><p></p>') {
         setLockedContent(prev => prev + html)
+        socket.emit('submit_move', {
+          sessionCode,
+          userId: user.id,
+          type: actionType,
+          content: html
+        })
       }
     }, 0)
   }
@@ -221,13 +269,13 @@ const Session = () => {
     })
     
     setShowSceneBuilder(false)
-    flushToLocked()
+    flushToLocked('SCENE')
   }
 
   // ACTION — inserts a blank centered line for the player to write the action
   const handleActionAction = () => {
     editorRef.current?.insertHTML(`<p style="text-align:center">ACTION</p>`)
-    flushToLocked()
+    flushToLocked('ACTION')
   }
 
   const allowedActions = (() => {
@@ -268,7 +316,7 @@ const Session = () => {
     }))
 
     setShowCharacterBuilder(false)
-    flushToLocked()
+    flushToLocked('CHARACTER')
   }
 
   // DIALOGUE — player overwrites the placeholder with the spoken line
@@ -281,7 +329,7 @@ const Session = () => {
       lastWasDialogue: true,
     }))
 
-    flushToLocked()
+    flushToLocked('DIALOGUE')
   }
 
   // TRANSITION — player picks from a list of options
@@ -298,7 +346,7 @@ const Session = () => {
     const t = option || selectedTransition || TRANSITION_OPTIONS[0]
     editorRef.current?.insertHTML(`<p style="text-align:center"><b>${t}</b></p>`)
     setShowTransitionBuilder(false)
-    flushToLocked()
+    flushToLocked('TRANSITION')
   }
 
   const ACTION_HANDLERS = {

@@ -1,12 +1,12 @@
 import mongoose from 'mongoose';
 
 const moveSchema = new mongoose.Schema({
-    _id: {type: String, required: true},
-    userId: {type: String, ref: 'User', required: true},
-    type: {type: String, enum: ['Dialogue', 'Character', 'Scene', 'Action'], required: true},
-    content: {type: String}
-}, {timestamps: true, minimize: false});
+    sessionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', required: true },
+    userId: { type: String, ref: 'User', required: true },
+    type: { type: String, enum: ['SCENE', 'ACTION', 'CHARACTER', 'DIALOGUE', 'TRANSITION'], required: true },
+    content: { type: String }
+}, { timestamps: true });
 
-const Round = mongoose.model('Round', roundSchema);
+const Move = mongoose.model('Move', moveSchema);
 
-export default Round
+export default Move;
