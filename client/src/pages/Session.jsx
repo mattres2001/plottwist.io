@@ -18,6 +18,26 @@ import {
   PHASES
 } from '../components/sessionConstants.js'
 
+const calcPhaseState = (sessionStartedAt) => {
+  let elapsed = Date.now() - sessionStartedAt
+  let totalWritingMs = 0
+  let t = 0
+  for (let i = 0; i < PHASES.length; i++) {
+    const p = PHASES[i]
+    if (elapsed < t + p.duration) {
+      const elapsedInPhase = elapsed - t
+      return {
+        phaseIndex: i,
+        roundTimeRemaining: p.label === 'Writing' ? Math.ceil((p.duration - elapsedInPhase) / 1000) : ROUND_DURATION_SEC,
+        elapsedSeconds: Math.floor(totalWritingMs / 1000) + (p.label === 'Writing' ? Math.floor(elapsedInPhase / 1000) : 0)
+      }
+    }
+    if (p.label === 'Writing') totalWritingMs += p.duration
+    t += p.duration
+  }
+  return { phaseIndex: PHASES.length - 1, roundTimeRemaining: 0, elapsedSeconds: Math.floor(totalWritingMs / 1000) }
+}
+
 // ─── Main Session Component ──────────────────────────────────────────────────
 const Session = () => {
 
@@ -70,7 +90,8 @@ const Session = () => {
       })
     })
 
-    socket.on("session_started", () => {
+    socket.on("session_started", ({ sessionStartedAt }) => {
+        sessionStartedAtRef.current = sessionStartedAt
         setSessionStarted(true)
         console.log("Session started")
     })
@@ -94,14 +115,13 @@ const Session = () => {
     })
 
     // Full state sync on reconnect or late join
-    socket.on("state_sync", ({ moves, isActive, currentTurnIndex, turnStartedAt, hostId }) => {
+    socket.on("state_sync", ({ moves, isActive, currentTurnIndex, turnStartedAt, hostId, sessionStartedAt }) => {
       if (hostId) {
         const current = store.getState().session
         store.getState().setSession({ ...current, hostId })
       }
       if (moves.length > 0) {
         setLockedContent(moves.map(m => m.content).join(''))
-        // Replay move history to reconstruct the allowed-actions structure
         let structure = { hasScene: false, lastWasCharacter: false, lastWasDialogue: false }
         for (const move of moves) {
           switch (move.type) {
@@ -112,7 +132,17 @@ const Session = () => {
         }
         setStructureState(structure)
       }
-      if (isActive) {
+      if (isActive && sessionStartedAt) {
+        sessionStartedAtRef.current = sessionStartedAt
+        const { phaseIndex: pi, roundTimeRemaining: rtr, elapsedSeconds: es } = calcPhaseState(sessionStartedAt)
+        prevPhaseRef.current = pi
+        setPhaseIndex(pi)
+        setRoundTimeRemaining(rtr)
+        setElapsedSeconds(es)
+        setSessionStarted(true)
+        setCurrentPlayerIndex(currentTurnIndex)
+        turnStartedAtRef.current = turnStartedAt
+      } else if (isActive) {
         setSessionStarted(true)
         setCurrentPlayerIndex(currentTurnIndex)
         turnStartedAtRef.current = turnStartedAt
@@ -209,6 +239,7 @@ const Session = () => {
   }
 
   const turnStartedAtRef = useRef(null)
+  const sessionStartedAtRef = useRef(null)
 
   useEffect(() => {
     if (!sessionStarted) return
@@ -400,9 +431,15 @@ const Session = () => {
   useEffect(()=>{
     if(!sessionStarted) return
     if(phaseIndex >= PHASES.length - 1) return
+    let delay = phase.duration
+    if (sessionStartedAtRef.current) {
+      let phaseStartMs = sessionStartedAtRef.current
+      for (let i = 0; i < phaseIndex; i++) phaseStartMs += PHASES[i].duration
+      delay = Math.max(0, phase.duration - (Date.now() - phaseStartMs))
+    }
     const t = setTimeout(()=>{
       setPhaseIndex(i => Math.min(i+1,PHASES.length-1))
-    },phase.duration)
+    }, delay)
     return ()=>clearTimeout(t)
   },[phaseIndex, phase.duration, sessionStarted])
 
@@ -461,6 +498,10 @@ const Session = () => {
         players={players}
         onStart={handleStartSession}
         isHost={IS_HOST}
+        onLeave={() => {
+          socket.emit("leave_session", { sessionCode, userId: user?.id })
+          navigate('/')
+        }}
       />
     )
   }
@@ -867,7 +908,7 @@ const Session = () => {
                 Cancel
               </button>
               <button
-                onClick={()=>{ setShowConfirm(false); navigate('/') }}
+                onClick={()=>{ setShowConfirm(false); socket.emit("leave_session", { sessionCode, userId: user?.id }); navigate('/') }}
                 className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
               >
                 Yes

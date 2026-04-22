@@ -109,6 +109,10 @@ io.on("connection", (socket) => {
             p => p.userId !== userId
         );
 
+        if (session.hostId === userId && session.players.length > 0) {
+            session.hostId = session.players[0].userId;
+        }
+
         // ✅ adjust turn index
         if (leavingIndex <= session.currentTurnIndex) {
             session.currentTurnIndex =
@@ -134,8 +138,9 @@ io.on("connection", (socket) => {
 
         session.currentTurnIndex = 0;
         session.started = true;
+        session.sessionStartedAt = Date.now();
 
-        io.to(sessionCode).emit("session_started");
+        io.to(sessionCode).emit("session_started", { sessionStartedAt: session.sessionStartedAt });
 
         startTurnLoop(sessionCode);
     });
@@ -155,6 +160,10 @@ io.on("connection", (socket) => {
                 session.players = session.players.filter(
                     p => p.socketId !== socket.id
                 );
+
+                if (session.hostId === player.userId && session.players.length > 0) {
+                    session.hostId = session.players[0].userId;
+                }
 
                 io.to(code).emit(
                     "players_updated",
@@ -228,7 +237,8 @@ io.on("connection", (socket) => {
                 isActive: !!session?.started,
                 currentTurnIndex: session?.currentTurnIndex ?? 0,
                 turnStartedAt: session?.turnStartedAt ?? Date.now(),
-                hostId: session?.hostId ?? null
+                hostId: session?.hostId ?? null,
+                sessionStartedAt: session?.sessionStartedAt ?? null
             });
         } catch (err) {
             console.error("request_state error:", err);
