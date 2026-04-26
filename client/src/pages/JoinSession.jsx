@@ -4,12 +4,14 @@ import { useAuth } from '@clerk/clerk-react'
 import { assets } from "../assets/assets.js"
 import api from '../api/axios.js'
 import toast from 'react-hot-toast'
+import { store } from '../store/store.js'
 
 const JoinSession = () => {
   const [sessionCode, setSessionCode] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const { getToken } = useAuth()
+  const setSession = store((state) => state.setSession)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -37,6 +39,7 @@ const JoinSession = () => {
       )
 
       if (data.success) {
+        setSession(data.session)
         toast.success('Joined session')
         navigate(`/session/${cleanedCode}`)
       } else {

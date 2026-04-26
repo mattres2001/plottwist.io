@@ -1,4 +1,5 @@
 import Session from '../models/Session.js'
+import Move from '../models/Move.js'
 import { generateSessionCode } from '../utils/sessionCode.js'
 import { io } from '../server.js'
 
@@ -74,6 +75,23 @@ export const getSessionByCode = async (req, res) => {
     }
 
     res.json({ success: true, session })
+  } catch (error) {
+    console.log(error)
+    res.json({ success: false, message: error.message })
+  }
+}
+
+export const getSessionMoves = async (req, res) => {
+  try {
+    const { code } = req.params
+
+    const session = await Session.findOne({ code: code.toUpperCase() })
+    if (!session) {
+      return res.json({ success: false, message: 'Session not found' })
+    }
+
+    const moves = await Move.find({ sessionId: session._id }).sort({ createdAt: 1 })
+    res.json({ success: true, moves })
   } catch (error) {
     console.log(error)
     res.json({ success: false, message: error.message })

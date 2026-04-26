@@ -10,6 +10,8 @@ import userRouter from './routes/userRoutes.js';
 import http from 'http';
 import { Server } from 'socket.io';
 import { TURN_DURATION_SEC } from '../client/src/components/sessionConstants.js'
+import Move from './models/Move.js';
+import Session from './models/Session.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -85,10 +87,10 @@ io.on("connection", (socket) => {
 
         socket.join(sessionCode);
 
-        // send updated players
+        // send updated players + hostId so every client knows who the host is
         io.to(sessionCode).emit(
             "players_updated",
-            session.players
+            { players: session.players, hostId: session.hostId }
         );
     });
 
@@ -107,6 +109,10 @@ io.on("connection", (socket) => {
             p => p.userId !== userId
         );
 
+        if (session.hostId === userId && session.players.length > 0) {
+            session.hostId = session.players[0].userId;
+        }
+
         // ✅ adjust turn index
         if (leavingIndex <= session.currentTurnIndex) {
             session.currentTurnIndex =
@@ -117,7 +123,7 @@ io.on("connection", (socket) => {
 
         io.to(sessionCode).emit(
             "players_updated",
-            session.players
+            { players: session.players, hostId: session.hostId }
         );
 
         if (session.players.length === 0) {
@@ -131,8 +137,10 @@ io.on("connection", (socket) => {
         if (!session) return;
 
         session.currentTurnIndex = 0;
+        session.started = true;
+        session.sessionStartedAt = Date.now();
 
-        io.to(sessionCode).emit("session_started");
+        io.to(sessionCode).emit("session_started", { sessionStartedAt: session.sessionStartedAt });
 
         startTurnLoop(sessionCode);
     });
@@ -153,9 +161,13 @@ io.on("connection", (socket) => {
                     p => p.socketId !== socket.id
                 );
 
+                if (session.hostId === player.userId && session.players.length > 0) {
+                    session.hostId = session.players[0].userId;
+                }
+
                 io.to(code).emit(
                     "players_updated",
-                    session.players
+                    { players: session.players, hostId: session.hostId }
                 );
 
                 if (session.players.length === 0) {
@@ -176,7 +188,62 @@ io.on("connection", (socket) => {
             (session.currentTurnIndex + 1) % session.players.length;
 
         startTurnLoop(sessionCode);
-    }); 
+    });
+
+    // ─── SUBMIT MOVE ──────────────────────────
+    socket.on("submit_move", async ({ sessionCode, userId, type, content }) => {
+        const session = sessions[sessionCode];
+        if (!session) return;
+
+        try {
+            // Cache the DB session ID so we only look it up once per session
+            if (!session.dbSessionId) {
+                const dbSession = await Session.findOne({ code: sessionCode });
+                if (dbSession) session.dbSessionId = dbSession._id;
+            }
+            if (!session.dbSessionId) return;
+
+            const move = await Move.create({ sessionId: session.dbSessionId, userId, type, content });
+
+            // Broadcast to everyone in the room except the sender
+            socket.to(sessionCode).emit("move_broadcast", {
+                moveId: move._id,
+                userId,
+                type,
+                content,
+                timestamp: move.createdAt
+            });
+        } catch (err) {
+            console.error("submit_move error:", err);
+        }
+    });
+
+    // ─── REQUEST FULL STATE (reconnect / late join) ───────────────────────────
+    socket.on("request_state", async ({ sessionCode }) => {
+        const session = sessions[sessionCode];
+
+        try {
+            let dbSessionId = session?.dbSessionId;
+            if (!dbSessionId) {
+                const dbSession = await Session.findOne({ code: sessionCode });
+                if (!dbSession) return socket.emit("state_sync", { moves: [], isActive: false });
+                dbSessionId = dbSession._id;
+                if (session) session.dbSessionId = dbSessionId;
+            }
+
+            const moves = await Move.find({ sessionId: dbSessionId }).sort({ createdAt: 1 });
+            socket.emit("state_sync", {
+                moves,
+                isActive: !!session?.started,
+                currentTurnIndex: session?.currentTurnIndex ?? 0,
+                turnStartedAt: session?.turnStartedAt ?? Date.now(),
+                hostId: session?.hostId ?? null,
+                sessionStartedAt: session?.sessionStartedAt ?? null
+            });
+        } catch (err) {
+            console.error("request_state error:", err);
+        }
+    });
 });
 
 export { io };

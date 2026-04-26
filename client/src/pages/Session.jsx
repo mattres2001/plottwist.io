@@ -18,6 +18,26 @@ import {
   PHASES
 } from '../components/sessionConstants.js'
 
+const calcPhaseState = (sessionStartedAt) => {
+  let elapsed = Date.now() - sessionStartedAt
+  let totalWritingMs = 0
+  let t = 0
+  for (let i = 0; i < PHASES.length; i++) {
+    const p = PHASES[i]
+    if (elapsed < t + p.duration) {
+      const elapsedInPhase = elapsed - t
+      return {
+        phaseIndex: i,
+        roundTimeRemaining: p.label === 'Writing' ? Math.ceil((p.duration - elapsedInPhase) / 1000) : ROUND_DURATION_SEC,
+        elapsedSeconds: Math.floor(totalWritingMs / 1000) + (p.label === 'Writing' ? Math.floor(elapsedInPhase / 1000) : 0)
+      }
+    }
+    if (p.label === 'Writing') totalWritingMs += p.duration
+    t += p.duration
+  }
+  return { phaseIndex: PHASES.length - 1, roundTimeRemaining: 0, elapsedSeconds: Math.floor(totalWritingMs / 1000) }
+}
+
 // ─── Main Session Component ──────────────────────────────────────────────────
 const Session = () => {
 
@@ -30,11 +50,13 @@ const Session = () => {
   // Here we simulate players joining every 3 seconds for demo purposes.
   // const [joinedPlayers, setJoinedPlayers] = useState([])
   const [sessionStarted, setSessionStarted] = useState(false)
-  const IS_HOST = true // simulate: current user is the host
 
   const updatePlayers = store((state) => state.setSession)
   const addPlayer = store((state) => state.addPlayer)
   const players = store((state) => state.session?.players || [])
+  const sessionHostId = store((state) => state.session?.hostId)
+
+  const IS_HOST = user?.id === sessionHostId
 
   console.log("USER OBJECT:", user)
   console.log("USERNAME FIELD:", user.username)
@@ -55,21 +77,21 @@ const Session = () => {
       username: user?.username
     })
 
+    // Request full document state — handles reconnects and late joins
+    socket.emit("request_state", { sessionCode })
+
     // ✅ Listen for events
-    socket.on("players_updated", (players) => {
+    socket.on("players_updated", ({ players, hostId }) => {
       const current = store.getState().session
-
-      console.log("📦 BEFORE:", current)
-
       store.getState().setSession({
         ...current,
-        players
+        players,
+        hostId: hostId ?? current.hostId
       })
-
-      console.log("📦 AFTER:", store.getState().session)
     })
 
-    socket.on("session_started", () => {
+    socket.on("session_started", ({ sessionStartedAt }) => {
+        sessionStartedAtRef.current = sessionStartedAt
         setSessionStarted(true)
         console.log("Session started")
     })
@@ -79,10 +101,61 @@ const Session = () => {
       turnStartedAtRef.current = turnStartedAt;
     });
 
+    // Another player submitted a move — append their content and sync structure state
+    socket.on("move_broadcast", ({ type, content }) => {
+      setLockedContent(prev => prev + content)
+      setStructureState(prev => {
+        switch (type) {
+          case 'SCENE': return { hasScene: true, lastWasCharacter: false, lastWasDialogue: false }
+          case 'CHARACTER': return { ...prev, lastWasCharacter: true, lastWasDialogue: false }
+          case 'DIALOGUE': return { ...prev, lastWasCharacter: false, lastWasDialogue: true }
+          default: return prev
+        }
+      })
+    })
+
+    // Full state sync on reconnect or late join
+    socket.on("state_sync", ({ moves, isActive, currentTurnIndex, turnStartedAt, hostId, sessionStartedAt }) => {
+      if (hostId) {
+        const current = store.getState().session
+        store.getState().setSession({ ...current, hostId })
+      }
+      if (moves.length > 0) {
+        setLockedContent(moves.map(m => m.content).join(''))
+        let structure = { hasScene: false, lastWasCharacter: false, lastWasDialogue: false }
+        for (const move of moves) {
+          switch (move.type) {
+            case 'SCENE': structure = { hasScene: true, lastWasCharacter: false, lastWasDialogue: false }; break
+            case 'CHARACTER': structure = { ...structure, lastWasCharacter: true, lastWasDialogue: false }; break
+            case 'DIALOGUE': structure = { ...structure, lastWasCharacter: false, lastWasDialogue: true }; break
+          }
+        }
+        setStructureState(structure)
+      }
+      if (isActive && sessionStartedAt) {
+        sessionStartedAtRef.current = sessionStartedAt
+        const { phaseIndex: pi, roundTimeRemaining: rtr, elapsedSeconds: es } = calcPhaseState(sessionStartedAt)
+        prevPhaseRef.current = pi
+        setPhaseIndex(pi)
+        setRoundTimeRemaining(rtr)
+        setElapsedSeconds(es)
+        setSessionStarted(true)
+        setCurrentPlayerIndex(currentTurnIndex)
+        turnStartedAtRef.current = turnStartedAt
+      } else if (isActive) {
+        setSessionStarted(true)
+        setCurrentPlayerIndex(currentTurnIndex)
+        turnStartedAtRef.current = turnStartedAt
+      }
+    })
+
     // 🧹 Cleanup listeners ONLY (not disconnect)
     return () => {
         socket.off("players_updated")
         socket.off("session_started")
+        socket.off("turn_update")
+        socket.off("move_broadcast")
+        socket.off("state_sync")
       }
   }, [sessionCode])
 
@@ -166,6 +239,7 @@ const Session = () => {
   }
 
   const turnStartedAtRef = useRef(null)
+  const sessionStartedAtRef = useRef(null)
 
   useEffect(() => {
     if (!sessionStarted) return
@@ -192,12 +266,19 @@ const Session = () => {
     }
   }, [isWriting])
 
-  // Moves whatever is currently in the editor into lockedContent, making it permanent
-  const flushToLocked = () => {
+  // Moves whatever is currently in the editor into lockedContent, making it permanent,
+  // then broadcasts the move to all other players in the session.
+  const flushToLocked = (actionType) => {
     setTimeout(() => {
       const html = editorRef.current?.flushContent()
       if (html && html !== '<p></p>' && html !== '<p></p><p></p>') {
         setLockedContent(prev => prev + html)
+        socket.emit('submit_move', {
+          sessionCode,
+          userId: user.id,
+          type: actionType,
+          content: html
+        })
       }
     }, 0)
   }
@@ -221,13 +302,13 @@ const Session = () => {
     })
     
     setShowSceneBuilder(false)
-    flushToLocked()
+    flushToLocked('SCENE')
   }
 
   // ACTION — inserts a blank centered line for the player to write the action
   const handleActionAction = () => {
     editorRef.current?.insertHTML(`<p style="text-align:center">ACTION</p>`)
-    flushToLocked()
+    flushToLocked('ACTION')
   }
 
   const allowedActions = (() => {
@@ -268,7 +349,7 @@ const Session = () => {
     }))
 
     setShowCharacterBuilder(false)
-    flushToLocked()
+    flushToLocked('CHARACTER')
   }
 
   // DIALOGUE — player overwrites the placeholder with the spoken line
@@ -281,7 +362,7 @@ const Session = () => {
       lastWasDialogue: true,
     }))
 
-    flushToLocked()
+    flushToLocked('DIALOGUE')
   }
 
   // TRANSITION — player picks from a list of options
@@ -298,7 +379,7 @@ const Session = () => {
     const t = option || selectedTransition || TRANSITION_OPTIONS[0]
     editorRef.current?.insertHTML(`<p style="text-align:center"><b>${t}</b></p>`)
     setShowTransitionBuilder(false)
-    flushToLocked()
+    flushToLocked('TRANSITION')
   }
 
   const ACTION_HANDLERS = {
@@ -350,9 +431,15 @@ const Session = () => {
   useEffect(()=>{
     if(!sessionStarted) return
     if(phaseIndex >= PHASES.length - 1) return
+    let delay = phase.duration
+    if (sessionStartedAtRef.current) {
+      let phaseStartMs = sessionStartedAtRef.current
+      for (let i = 0; i < phaseIndex; i++) phaseStartMs += PHASES[i].duration
+      delay = Math.max(0, phase.duration - (Date.now() - phaseStartMs))
+    }
     const t = setTimeout(()=>{
       setPhaseIndex(i => Math.min(i+1,PHASES.length-1))
-    },phase.duration)
+    }, delay)
     return ()=>clearTimeout(t)
   },[phaseIndex, phase.duration, sessionStarted])
 
@@ -411,6 +498,10 @@ const Session = () => {
         players={players}
         onStart={handleStartSession}
         isHost={IS_HOST}
+        onLeave={() => {
+          socket.emit("leave_session", { sessionCode, userId: user?.id })
+          navigate('/')
+        }}
       />
     )
   }
@@ -817,7 +908,7 @@ const Session = () => {
                 Cancel
               </button>
               <button
-                onClick={()=>{ setShowConfirm(false); navigate('/') }}
+                onClick={()=>{ setShowConfirm(false); socket.emit("leave_session", { sessionCode, userId: user?.id }); navigate('/') }}
                 className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
               >
                 Yes

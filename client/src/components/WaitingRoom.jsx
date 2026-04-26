@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { assets } from "../assets/assets.js"
 
 const MIN_PLAYERS = 2
 const MAX_PLAYERS = 4
 
-const WaitingRoom = ({ sessionCode, players, onStart, isHost }) => {
+const WaitingRoom = ({ sessionCode, players, onStart, isHost, onLeave }) => {
   const canStart = players.length >= MIN_PLAYERS
   const [dots, setDots] = useState('')
-  const navigate = useNavigate()
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -174,7 +172,7 @@ const WaitingRoom = ({ sessionCode, players, onStart, isHost }) => {
         )}
 
         <button
-          onClick={() => navigate('/')}
+          onClick={onLeave}
           className="w-full py-3 rounded-xl font-semibold text-white transition-all duration-300"
           style={{
             background: 'rgba(255,255,255,0.08)',
