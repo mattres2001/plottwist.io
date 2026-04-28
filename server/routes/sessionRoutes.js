@@ -4,13 +4,17 @@ import {
   startSession,
   joinSession,
   getSessionByCode,
-  getSessionMoves
+  getSessionMoves,
+  endSession,
+  getGallerySessions
 } from '../controllers/sessionController.js'
 
 const sessionRouter = express.Router()
 
 sessionRouter.post('/start', protect, startSession)
 sessionRouter.post('/join', protect, joinSession)
+sessionRouter.get('/gallery', protect, getGallerySessions)
+sessionRouter.post('/:code/end', protect, endSession)
 sessionRouter.get('/:code/moves', protect, getSessionMoves)
 sessionRouter.get('/:code', protect, getSessionByCode)
 

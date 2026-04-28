@@ -7,8 +7,9 @@ import StarRating from '../components/StarRating.jsx'
 import ActionPrompt from '../components/ActionPrompt.jsx'
 import TurnHUD from '../components/TurnHUD.jsx'
 import { socket } from "../socket"
-import { useUser } from '@clerk/clerk-react'
+import { useUser, useAuth } from '@clerk/clerk-react'
 import { store } from '../store/store.js'
+import api from '../api/axios.js'
 import {
   GAME_DURATION_SEC,
   ROUND_DURATION_SEC,
@@ -45,6 +46,7 @@ const Session = () => {
   const navigate = useNavigate()
   const { sessionCode } = useParams()
   const { user } = useUser()
+  const { getToken } = useAuth()
 
   const [scriptPrompt, setScriptPrompt] = useState(null)
   const [showPromptReveal, setShowPromptReveal] = useState(false)
@@ -627,14 +629,39 @@ const Session = () => {
   },[phase.label, sessionStarted])
 
   useEffect(()=>{
-    if(phase.label === 'The End'){
-      setTimeout(()=>{ setOverallRating(4.7) },500)
-      if (!scriptSavedRef.current) {
-        scriptSavedRef.current = true
-        socket.emit("save_script", { sessionCode, content: lockedContent })
+    if(phase.label !== 'The End') return
+    const fetchAverage = async () => {
+      try {
+        const token = await getToken()
+        const { data } = await api.get(`/api/ratings/${sessionCode}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (data.success && data.average !== null) setOverallRating(data.average)
+      } catch (err) {
+        console.error('Failed to fetch average rating:', err)
       }
     }
+    fetchAverage()
   },[phase.label])
+
+  useEffect(() => {
+    if (phase.label !== 'The End') return
+    if (scriptSavedRef.current) return
+    scriptSavedRef.current = true
+    const save = async () => {
+      try {
+        const token = await getToken()
+        await api.post(
+          `/api/session/${sessionCode}/end`,
+          { script: lockedContent, prompt: scriptPrompt },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+      } catch (err) {
+        console.error('Failed to save script:', err)
+      }
+    }
+    save()
+  }, [phase.label, lockedContent])
 
   const formatTime = (totalSeconds)=>{
     const m = Math.floor(totalSeconds/60)
@@ -642,9 +669,20 @@ const Session = () => {
     return `${m}:${s.toString().padStart(2,'0')}`
   }
 
-  const handleRating = (star)=>{
+  const handleRating = async (star) => {
     setSessionRating(star)
     setRatingSubmitted(true)
+    try {
+      const token = await getToken()
+      const { data } = await api.post(
+        '/api/ratings',
+        { sessionCode, score: star },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (data.success) setOverallRating(data.average)
+    } catch (err) {
+      console.error('Failed to submit rating:', err)
+    }
   }
 
   const handleGenerateStoryboard = ()=>{ setShowStoryboard(true) }
