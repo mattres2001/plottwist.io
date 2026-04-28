@@ -3,7 +3,7 @@ import { useEditor, EditorContent } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import TextAlign from "@tiptap/extension-text-align"
 
-const DocumentEditor = forwardRef(({ content, onChange }, ref) => {
+const DocumentEditor = forwardRef(({ content, onChange, isMyTurn }, ref) => {
 
     const editor = useEditor({
         extensions: [
@@ -28,6 +28,11 @@ const DocumentEditor = forwardRef(({ content, onChange }, ref) => {
             editor.commands.setContent("<p></p><p></p>", false)
         }
     }, [content, editor])
+
+    React.useEffect(() => {
+        if (!editor) return
+        editor.setEditable(isMyTurn)
+    }, [editor, isMyTurn])
 
     useImperativeHandle(ref, () => ({
 
@@ -63,8 +68,8 @@ const DocumentEditor = forwardRef(({ content, onChange }, ref) => {
     return (
         <div
             className="w-full flex-1"
-            style={{ minHeight: '300px', cursor: 'text' }}
-            onClick={() => editor.commands.focus()}
+            style={{ minHeight: '300px', cursor: isMyTurn ? 'text' : 'default' }}
+            onClick={() => isMyTurn && editor.commands.focus()}
         >
             <EditorContent editor={editor} className="w-full h-full" />
         </div>

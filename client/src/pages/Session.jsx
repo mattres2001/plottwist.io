@@ -15,7 +15,8 @@ import {
   TURN_DURATION_SEC,
   MIN_PLAYERS,
   MOCK_PLAYERS,
-  PHASES
+  PHASES,
+  BETWEEN_TURN_COUNTDOWN
 } from '../components/sessionConstants.js'
 
 const calcPhaseState = (sessionStartedAt) => {
@@ -44,6 +45,29 @@ const Session = () => {
   const navigate = useNavigate()
   const { sessionCode } = useParams()
   const { user } = useUser()
+
+  const [scriptPrompt, setScriptPrompt] = useState(null)
+  const [showPromptReveal, setShowPromptReveal] = useState(false)
+  const [promptCountdown, setPromptCountdown] = useState(5)
+
+  const [actionSuggestions, setActionSuggestions] = useState([])
+  const [loadingActions, setLoadingActions] = useState(false)
+  const [showActionBuilder, setShowActionBuilder] = useState(false)
+
+  const [dialogueSuggestions, setDialogueSuggestions] = useState([])
+  const [loadingDialogue, setLoadingDialogue] = useState(false)
+  const [showDialogueBuilder, setShowDialogueBuilder] = useState(false)
+
+  const [characterSuggestions, setCharacterSuggestions] = useState([])
+  const [loadingCharacter, setLoadingCharacter] = useState(false)
+
+  const [sceneSuggestions, setSceneSuggestions] = useState([])
+  const [loadingScenes, setLoadingScenes] = useState(false)
+
+  const [betweenTurns, setBetweenTurns] = useState(false)
+  const [betweenTurnsCountdown, setBetweenTurnsCountdown] = useState(BETWEEN_TURN_COUNTDOWN)
+
+  const [showDocument, setShowDocument] = useState(false)  
 
   // ── Waiting room state ──
   // In a real app, `joinedPlayers` would come from your backend/socket.
@@ -90,32 +114,44 @@ const Session = () => {
       })
     })
 
-    socket.on("session_started", ({ sessionStartedAt }) => {
+    socket.on("session_started", ({ sessionStartedAt, scriptPrompt }) => {
         sessionStartedAtRef.current = sessionStartedAt
-        setSessionStarted(true)
-        console.log("Session started")
+        if (scriptPrompt) setScriptPrompt(scriptPrompt)
+        setShowPromptReveal(true) 
+        // setScriptPrompt(scriptPrompt)
+        // setSessionStarted(true)
+        // console.log("Session started")
     })
 
-    socket.on("turn_update", ({ currentTurnIndex, turnStartedAt, turnDuration }) => {
-      setCurrentPlayerIndex(currentTurnIndex);
-      turnStartedAtRef.current = turnStartedAt;
-    });
+    socket.on("turn_update", ({ currentTurnIndex, turnStartedAt }) => {
+      setCurrentPlayerIndex(currentTurnIndex)
+      turnStartedAtRef.current = turnStartedAt
+      setShowSceneBuilder(false)
+      setShowCharacterBuilder(false)
+      setShowTransitionBuilder(false)
+      setShowActionBuilder(false)
+      setShowDialogueBuilder(false)
+      setShowActionPrompt(false)
+      setShowDocument(false)
+      setBetweenTurns(true)
+    })
 
     // Another player submitted a move — append their content and sync structure state
     socket.on("move_broadcast", ({ type, content }) => {
       setLockedContent(prev => prev + content)
       setStructureState(prev => {
         switch (type) {
-          case 'SCENE': return { hasScene: true, lastWasCharacter: false, lastWasDialogue: false }
-          case 'CHARACTER': return { ...prev, lastWasCharacter: true, lastWasDialogue: false }
-          case 'DIALOGUE': return { ...prev, lastWasCharacter: false, lastWasDialogue: true }
-          default: return prev
+          case 'SCENE': return { hasScene: true, lastWasScene: true, lastWasCharacter: false, lastWasDialogue: false, lastWasTransition: false  }
+          case 'CHARACTER': return { ...prev, lastWasScene: false, lastWasCharacter: true, lastWasDialogue: false, lastWasTransition: false  }
+          case 'DIALOGUE': return { ...prev, lastWasScene: false, lastWasCharacter: false, lastWasDialogue: true, lastWasTransition: false  }
+          case 'TRANSITION': return { ...prev, lastWasScene: false, lastWasCharacter: false, lastWasDialogue: false, lastWasTransition: true }
+          default: return { ...prev, lastWasScene: false, lastWasTransition: false }
         }
       })
     })
 
     // Full state sync on reconnect or late join
-    socket.on("state_sync", ({ moves, isActive, currentTurnIndex, turnStartedAt, hostId, sessionStartedAt }) => {
+    socket.on("state_sync", ({ moves, isActive, currentTurnIndex, turnStartedAt, hostId, sessionStartedAt, scriptPrompt: syncedPrompt }) => {
       if (hostId) {
         const current = store.getState().session
         store.getState().setSession({ ...current, hostId })
@@ -125,9 +161,11 @@ const Session = () => {
         let structure = { hasScene: false, lastWasCharacter: false, lastWasDialogue: false }
         for (const move of moves) {
           switch (move.type) {
-            case 'SCENE': structure = { hasScene: true, lastWasCharacter: false, lastWasDialogue: false }; break
-            case 'CHARACTER': structure = { ...structure, lastWasCharacter: true, lastWasDialogue: false }; break
-            case 'DIALOGUE': structure = { ...structure, lastWasCharacter: false, lastWasDialogue: true }; break
+            case 'SCENE': structure = { hasScene: true, lastWasScene: true, lastWasCharacter: false, lastWasDialogue: false, lastWasTransition: true  }; break
+            case 'CHARACTER': structure = { ...structure, lastWasScene: false, lastWasCharacter: true, lastWasDialogue: false, lastWasTransition: true  }; break
+            case 'DIALOGUE': structure = { ...structure, lastWasScene: false, lastWasCharacter: false, lastWasDialogue: true, lastWasTransition: true  }; break
+            case 'TRANSITION': structure = { ...structure, lastWasScene: false, lastWasCharacter: false, lastWasDialogue: false, lastWasTransition: true }; break
+            default: structure = { ...structure, lastWasScene: false, lastWasTransition: false }; break
           }
         }
         setStructureState(structure)
@@ -147,6 +185,27 @@ const Session = () => {
         setCurrentPlayerIndex(currentTurnIndex)
         turnStartedAtRef.current = turnStartedAt
       }
+      if (syncedPrompt) setScriptPrompt(syncedPrompt)
+    })
+
+    socket.on("action_suggestions", ({ suggestions }) => {
+      setActionSuggestions(suggestions)
+      setLoadingActions(false)
+    })
+
+    socket.on("dialogue_suggestions", ({ suggestions }) => {
+      setDialogueSuggestions(suggestions)
+      setLoadingDialogue(false)
+    })
+
+    socket.on("character_suggestions", ({ suggestions }) => {
+      setCharacterSuggestions(suggestions)
+      setLoadingCharacter(false)
+    })
+
+    socket.on("scene_suggestions", ({ suggestions }) => {
+      setSceneSuggestions(suggestions)
+      setLoadingScenes(false)
     })
 
     // 🧹 Cleanup listeners ONLY (not disconnect)
@@ -156,8 +215,50 @@ const Session = () => {
         socket.off("turn_update")
         socket.off("move_broadcast")
         socket.off("state_sync")
+        socket.off("action_suggestions")
+        socket.off("dialogue_suggestions")
+        socket.off("character_suggestions")
+        socket.off("scene_suggestions")
       }
   }, [sessionCode])
+
+  useEffect(() => {
+    if (!showPromptReveal) return
+
+    setPromptCountdown(5)
+    const interval = setInterval(() => {
+      setPromptCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          setShowPromptReveal(false)
+          setSessionStarted(true)  // NOW start the game
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [showPromptReveal])
+
+  useEffect(() => {
+    if (!betweenTurns) return
+
+    setBetweenTurnsCountdown(BETWEEN_TURN_COUNTDOWN)
+    const interval = setInterval(() => {
+      setBetweenTurnsCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          setBetweenTurns(false)
+          setShowActionPrompt(true)
+          return BETWEEN_TURN_COUNTDOWN
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [betweenTurns])
 
   useEffect(() => {
     if (!sessionStarted) return;
@@ -183,8 +284,10 @@ const Session = () => {
 
   const [structureState, setStructureState] = useState({
     hasScene: false,
+    lastWasScene: false,
     lastWasCharacter: false,
     lastWasDialogue: false,
+    lastWasTransition: false,
   })
 
   const [showConfirm,setShowConfirm] = useState(false)
@@ -208,14 +311,10 @@ const Session = () => {
   const [selectedAction, setSelectedAction] = useState(null)
 
   // Scene builder — INT/EXT and DAY/NIGHT persist across turns; location is always editable
-  const [sceneIntExt, setSceneIntExt] = useState(null)       // 'INT' | 'EXT' | null
-  const [sceneDayNight, setSceneDayNight] = useState(null)   // 'DAY' | 'NIGHT' | null
   const [showSceneBuilder, setShowSceneBuilder] = useState(false)
-  const [sceneLocation, setSceneLocation] = useState('')
 
   // Character builder
   const [showCharacterBuilder, setShowCharacterBuilder] = useState(false)
-  const [characterName, setCharacterName] = useState('')
 
   const MY_PLAYER_INDEX = 0
   const isWriting = PHASES[phaseIndex]?.label === 'Writing'
@@ -223,6 +322,10 @@ const Session = () => {
   const currentPlayer = players[currentPlayerIndex]?.username
   const myIndex = players.findIndex(p => p.userId === user.id)
   const isMyTurn = currentPlayerIndex === myIndex
+
+  const currentAct = PHASES[phaseIndex]?.label.startsWith('Act') 
+    ? PHASES[phaseIndex].label 
+    : PHASES.slice(0, phaseIndex).reverse().find(p => p.label.startsWith('Act'))?.label ?? 'Act 1'
 
   const isRestRef = useRef(false)
   const prevPhaseRef = useRef(0)
@@ -257,7 +360,7 @@ const Session = () => {
 
   useEffect(() => {
     if (isWriting) {
-      setCurrentPlayerIndex(0)
+      // setCurrentPlayerIndex(0)
       setTurnTimeLeft(TURN_DURATION_SEC)
       setSelectedAction(null)
       setShowActionPrompt(true)
@@ -285,30 +388,53 @@ const Session = () => {
 
   // SCENE — opens the scene builder modal; INT/EXT and DAY/NIGHT choices are sticky
   const handleSceneAction = () => {
-    setSceneLocation('')
+    setSceneSuggestions([])
+    setLoadingScenes(true)
     setShowSceneBuilder(true)
+    socket.emit("request_scene_suggestions", {
+      sessionCode,
+      scriptContent: lockedContent,
+      currentAct
+    })
   }
 
-  const handleConfirmScene = () => {
-    const ie = sceneIntExt || 'INT'
-    const dn = sceneDayNight || 'DAY'
-    const loc = sceneLocation.trim() || 'LOCATION'
-    editorRef.current?.insertHTML(`<p style="text-align:center"><b>${ie}. ${loc} - ${dn}</b></p>`)
-    
+  const handleConfirmScene = (heading) => {
+    editorRef.current?.insertHTML(`<p style="text-align:center"><b>${heading}</b></p><p><br></p>`)
     setStructureState({
       hasScene: true,
+      lastWasScene: true,
       lastWasCharacter: false,
       lastWasDialogue: false,
+      lastWasTransition: false
     })
-    
     setShowSceneBuilder(false)
     flushToLocked('SCENE')
+    endTurn()
   }
-
   // ACTION — inserts a blank centered line for the player to write the action
   const handleActionAction = () => {
-    editorRef.current?.insertHTML(`<p style="text-align:center">ACTION</p>`)
+    setActionSuggestions([])
+    setLoadingActions(true)
+    setShowActionBuilder(true)
+    socket.emit("request_action_suggestions", {
+      sessionCode,
+      scriptContent: lockedContent,
+      currentAct
+    })
+  }
+
+  const handleConfirmAction = (suggestion) => {
+    editorRef.current?.insertHTML(`<p style="text-align:left"><em>${suggestion}</em></p><p><br></p>`)
+    setStructureState(prev => ({
+      ...prev,
+      lastWasScene: false,
+      lastWasCharacter: false,
+      lastWasDialogue: false,
+      lastWasTransition: false
+    }))
+    setShowActionBuilder(false)
     flushToLocked('ACTION')
+    endTurn()
   }
 
   const allowedActions = (() => {
@@ -323,7 +449,14 @@ const Session = () => {
     }
 
     // 3. Dialogue can happen anytime after character, but not first
-    const base = ['SCENE', 'ACTION', 'CHARACTER', 'TRANSITION']
+    const base = ['ACTION', 'CHARACTER']
+
+    // Only allow a new SCENE if the last action wasn't also a SCENE
+    if (!structureState.lastWasScene) 
+      base.unshift('SCENE')
+
+
+    if (!structureState.lastWasTransition) base.push('TRANSITION')
 
     if (structureState.lastWasDialogue) {
       return base // can continue normally after dialogue
@@ -334,35 +467,55 @@ const Session = () => {
 
   // CHARACTER — opens builder modal for player to type the character's name
   const handleCharacterAction = () => {
-    setCharacterName('')
+    setCharacterSuggestions([])
+    setLoadingCharacter(true)
     setShowCharacterBuilder(true)
+    socket.emit("request_character_suggestions", {
+      sessionCode,
+      scriptContent: lockedContent,
+      currentAct
+    })
   }
 
-  const handleConfirmCharacter = () => {
-    const name = characterName.trim() || 'CHARACTER NAME'
-    editorRef.current?.insertHTML(`<p style="text-align:center"><b>${name.toUpperCase()}</b></p>`)
-
+  const handleConfirmCharacter = (name) => {
+    const uppercased = name.trim().toUpperCase()
+    editorRef.current?.insertHTML(`<p style="text-align:center"><b>${uppercased}</b></p>`)
     setStructureState(prev => ({
       ...prev,
+      lastWasScene: false,
       lastWasCharacter: true,
       lastWasDialogue: false,
+      lastWasTransition: false
     }))
-
     setShowCharacterBuilder(false)
     flushToLocked('CHARACTER')
+    endTurn()
   }
 
   // DIALOGUE — player overwrites the placeholder with the spoken line
   const handleDialogueAction = () => {
-    editorRef.current?.insertHTML(`<p style="text-align:center">DIALOGUE</p>`)
+    setDialogueSuggestions([])
+    setLoadingDialogue(true)
+    setShowDialogueBuilder(true)
+    socket.emit("request_dialogue_suggestions", {
+      sessionCode,
+      scriptContent: lockedContent,
+      currentAct
+    })
+  }
 
+  const handleConfirmDialogue = (suggestion) => {
+    editorRef.current?.insertHTML(`<p style="text-align:center">${suggestion}</p><p><br></p>`)
     setStructureState(prev => ({
       ...prev,
+      lastWasScene: false,
       lastWasCharacter: false,
       lastWasDialogue: true,
+      lastWasTransition: false
     }))
-
+    setShowDialogueBuilder(false)
     flushToLocked('DIALOGUE')
+    endTurn()
   }
 
   // TRANSITION — player picks from a list of options
@@ -377,9 +530,17 @@ const Session = () => {
 
   const handleConfirmTransition = (option) => {
     const t = option || selectedTransition || TRANSITION_OPTIONS[0]
-    editorRef.current?.insertHTML(`<p style="text-align:center"><b>${t}</b></p>`)
+    editorRef.current?.insertHTML(`<p style="text-align:right"><b>${t}</b></p><p><br></p>`)
     setShowTransitionBuilder(false)
     flushToLocked('TRANSITION')
+    setStructureState(prev => ({
+      ...prev,
+      lastWasScene: false,  // ← add to any handler that resets structure
+      lastWasCharacter: false,
+      lastWasDialogue: false,
+      lastWasTransition: true
+    }))
+    endTurn()
   }
 
   const ACTION_HANDLERS = {
@@ -406,11 +567,12 @@ const Session = () => {
     // setCurrentPlayerIndex(i => (i + 1) % MOCK_PLAYERS.length)
     socket.emit("request_end_turn", { sessionCode })
     setSelectedAction(null)
-    setShowActionPrompt(true)
+    // setShowActionPrompt(true)
     setTurnTimeLeft(TURN_DURATION_SEC)
     setShowSceneBuilder(false)
     setShowCharacterBuilder(false)
     setShowTransitionBuilder(false)
+    setShowActionBuilder(false)
   }
 
   useEffect(()=>{
@@ -491,6 +653,61 @@ const Session = () => {
   const handleTransition = () => handleTransitionAction()
 
   // ── Show waiting room until session is started ──
+  if (showPromptReveal) {
+    return (
+      <div className="relative h-screen w-screen flex flex-col items-center justify-center overflow-hidden bg-black">
+        <img
+          src={assets.bg_image_login}
+          className="absolute inset-0 h-full w-full object-cover opacity-30"
+          alt="background"
+        />
+        <div className="absolute inset-0 bg-black/70" />
+
+        <div className="relative z-10 flex flex-col items-center gap-10 text-center px-8 max-w-2xl">
+          <p className="text-white/40 text-xs uppercase tracking-[0.3em] font-mono">
+            Your Prompt
+          </p>
+
+          <h1
+            className="text-white font-bold text-4xl md:text-5xl leading-tight drop-shadow-lg"
+            style={{ textShadow: '0 0 40px rgba(125,211,252,0.3)' }}
+          >
+            {scriptPrompt}
+          </h1>
+
+          <p className="text-white/40 text-sm font-mono">
+            Writing begins in...
+          </p>
+
+          {/* Countdown ring */}
+          <div className="relative flex items-center justify-center">
+            <svg className="w-24 h-24 -rotate-90" viewBox="0 0 96 96">
+              <circle
+                cx="48" cy="48" r="40"
+                fill="none"
+                stroke="rgba(255,255,255,0.1)"
+                strokeWidth="4"
+              />
+              <circle
+                cx="48" cy="48" r="40"
+                fill="none"
+                stroke="#7dd3fc"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 40}`}
+                strokeDashoffset={`${2 * Math.PI * 40 * (1 - promptCountdown / 5)}`}
+                style={{ transition: 'stroke-dashoffset 1s linear' }}
+              />
+            </svg>
+            <span className="absolute text-white font-bold text-3xl font-mono">
+              {promptCountdown}
+            </span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (!sessionStarted) {
     return (
       <WaitingRoom
@@ -522,10 +739,24 @@ const Session = () => {
       <a
         href="#"
         onClick={(e)=>{ e.preventDefault(); setShowConfirm(true) }}
-        className="absolute top-10 left-5 z-20 bg-white/80 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-lg"
+        className="absolute top-10 left-5 z-[60] bg-white/80 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-lg"
       >
         Leave
       </a>
+
+      {scriptPrompt && (
+        <div
+          className="absolute top-24 left-5 z-[60] px-4 py-3 rounded-xl text-left max-w-[220px]"
+          style={{
+            background: 'rgba(10,10,20,0.75)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          <p className="text-white/40 text-xs uppercase tracking-widest mb-1 font-mono">Prompt</p>
+          <p className="text-white font-semibold text-sm leading-snug">{scriptPrompt}</p>
+        </div>
+      )}
 
       <div className="absolute top-10 right-6 z-20 bg-black/60 text-white px-3 py-1 rounded-lg font-mono text-base">
         Session Code: {sessionCode || '—'}
@@ -559,14 +790,52 @@ const Session = () => {
 
       {phase.label === 'Writing' && (
         <>
+          <button
+            onClick={() => setShowDocument(prev => !prev)}
+            className="absolute bottom-14 left-1/2 -translate-x-1/2 z-[60] px-4 py-1.5 rounded-lg text-xs font-mono transition-all duration-200"
+            style={{
+              background: 'rgba(10,10,20,0.75)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              color: 'rgba(255,255,255,0.6)',
+            }}
+          >
+            {showDocument ? 'Hide Script ↑' : 'Show Script ↓'}
+          </button>
+
+          {/* Always show the document */}
           <div className="absolute bottom-0 z-10 px-3 py-0 rounded-lg font-mono">
             <DocumentWindow
               ref={editorRef}
               lockedContent={lockedContent}
               currentContent={currentContent}
               onContentChange={setCurrentContent}
+              isMyTurn={isMyTurn}
             />
           </div>
+
+          {/* Script modal overlay */}
+          {showDocument && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowDocument(false)} />
+              <div
+                className="relative z-10 w-[600px] h-[80vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(15,15,25,0.98) 0%, rgba(30,20,50,0.98) 100%)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                }}
+              >
+                <div className="px-6 pt-5 pb-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                  <h2 className="text-white font-bold text-lg">Full Script</h2>
+                  <button onClick={() => setShowDocument(false)} className="text-white/40 hover:text-white text-sm font-mono">Close ✕</button>
+                </div>
+                <div
+                  className="flex-1 overflow-y-auto p-6 text-white font-mono text-sm leading-relaxed"
+                  style={{ fontFamily: "'Courier New', Courier, monospace" }}
+                  dangerouslySetInnerHTML={{ __html: lockedContent }}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-5">
             <div className="flex gap-3 bg-black/60 text-white px-4 py-2 rounded-lg text-sm">
@@ -579,7 +848,7 @@ const Session = () => {
           </div>
 
           {/* End Turn Early — only shown when it's your turn and you've already chosen an action */}
-          {isMyTurn && !showActionPrompt && (
+          {/* {isMyTurn && !showActionPrompt && (
             <div className="fixed right-8 bottom-[45%] z-20">
               <button
                 onClick={endTurn}
@@ -595,6 +864,38 @@ const Session = () => {
                 End Turn →
               </button>
             </div>
+          )} */}
+
+          {!showActionPrompt && (
+            <div className="fixed right-8 bottom-[45%] z-20">
+              {betweenTurns ? (
+                <div
+                  className="px-6 py-4 rounded-xl text-center"
+                  style={{
+                    background: 'rgba(10,10,20,0.85)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    backdropFilter: 'blur(8px)',
+                  }}
+                >
+                  <p className="text-white/40 text-xs uppercase tracking-widest mb-1 font-mono">Next turn in</p>
+                  <p className="text-white font-bold text-9xl font-mono">{betweenTurnsCountdown}</p>
+                </div>
+              ) : (
+                <button
+                  onClick={endTurn}
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all duration-200 shadow-lg"
+                  style={{
+                    background: 'rgba(34,197,94,0.85)',
+                    border: '1px solid rgba(34,197,94,1)',
+                    color: '#ffffff',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(22,163,74,0.95)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(34,197,94,0.85)' }}
+                >
+                  End Turn →
+                </button>
+              )}
+            </div>
           )}
 
           {/* Scene Builder Modal */}
@@ -602,7 +903,7 @@ const Session = () => {
             <div className="fixed inset-0 z-50 flex items-center justify-center">
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSceneBuilder(false)} />
               <div
-                className="relative z-10 w-[400px] rounded-2xl overflow-hidden shadow-2xl"
+                className="relative z-10 w-[420px] rounded-2xl overflow-hidden shadow-2xl"
                 style={{
                   background: 'linear-gradient(135deg, rgba(15,15,25,0.98) 0%, rgba(30,20,50,0.98) 100%)',
                   border: '1px solid rgba(255,255,255,0.12)',
@@ -610,90 +911,44 @@ const Session = () => {
               >
                 <div className="px-6 pt-5 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                   <p className="text-white/50 text-xs uppercase tracking-widest mb-1">Scene Heading</p>
-                  <h2 className="text-white font-bold text-lg">Set your scene</h2>
+                  <h2 className="text-white font-bold text-lg">Where does this take place?</h2>
                 </div>
 
-                <div className="p-6 flex flex-col gap-5">
-                  {/* INT / EXT — sticky */}
-                  <div>
-                    <p className="text-white/50 text-xs uppercase tracking-widest mb-2">Interior / Exterior</p>
-                    <div className="flex gap-2">
-                      {['INT', 'EXT'].map(opt => (
-                        <button
-                          key={opt}
-                          onClick={() => setSceneIntExt(opt)}
-                          className="flex-1 py-2 rounded-lg font-bold text-sm transition-all duration-150"
-                          style={{
-                            background: sceneIntExt === opt ? 'rgba(125,211,252,0.25)' : 'rgba(255,255,255,0.06)',
-                            border: sceneIntExt === opt ? '1px solid rgba(125,211,252,0.6)' : '1px solid rgba(255,255,255,0.1)',
-                            color: sceneIntExt === opt ? '#7dd3fc' : 'rgba(255,255,255,0.6)',
-                          }}
-                        >
-                          {opt}.
-                        </button>
-                      ))}
+                <div className="p-4 flex flex-col gap-2">
+                  {loadingScenes ? (
+                    <div className="flex flex-col items-center justify-center py-8 gap-3">
+                      <div className="w-6 h-6 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
+                      <p className="text-white/40 text-sm font-mono">Generating scenes...</p>
                     </div>
-                  </div>
-
-                  {/* DAY / NIGHT — sticky */}
-                  <div>
-                    <p className="text-white/50 text-xs uppercase tracking-widest mb-2">Time of Day</p>
-                    <div className="flex gap-2">
-                      {['DAY', 'NIGHT'].map(opt => (
-                        <button
-                          key={opt}
-                          onClick={() => setSceneDayNight(opt)}
-                          className="flex-1 py-2 rounded-lg font-bold text-sm transition-all duration-150"
-                          style={{
-                            background: sceneDayNight === opt ? 'rgba(125,211,252,0.25)' : 'rgba(255,255,255,0.06)',
-                            border: sceneDayNight === opt ? '1px solid rgba(125,211,252,0.6)' : '1px solid rgba(255,255,255,0.1)',
-                            color: sceneDayNight === opt ? '#7dd3fc' : 'rgba(255,255,255,0.6)',
-                          }}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Location — always editable */}
-                  <div>
-                    <p className="text-white/50 text-xs uppercase tracking-widest mb-2">Location</p>
-                    <input
-                      type="text"
-                      placeholder="e.g. COFFEE SHOP, ROOFTOP, CAVE..."
-                      value={sceneLocation}
-                      onChange={e => setSceneLocation(e.target.value.toUpperCase())}
-                      onKeyDown={e => e.key === 'Enter' && handleConfirmScene()}
-                      autoFocus
-                      className="w-full px-4 py-2.5 rounded-lg text-white font-mono text-sm outline-none"
-                      style={{
-                        background: 'rgba(255,255,255,0.07)',
-                        border: '1px solid rgba(255,255,255,0.15)',
-                      }}
-                    />
-                  </div>
-
-                  {/* Preview */}
-                  <div className="text-center font-mono text-white/70 text-sm py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <span className="font-bold text-white">
-                      {sceneIntExt || 'INT'}. {sceneLocation || 'LOCATION'} - {sceneDayNight || 'DAY'}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={handleConfirmScene}
-                    className="w-full py-2.5 rounded-xl font-bold text-sm transition-all duration-200"
-                    style={{
-                      background: 'rgba(125,211,252,0.2)',
-                      border: '1px solid rgba(125,211,252,0.5)',
-                      color: '#7dd3fc',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(125,211,252,0.35)' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(125,211,252,0.2)' }}
-                  >
-                    Insert Scene Heading
-                  </button>
+                  ) : (
+                    sceneSuggestions.map((heading, i) => (
+                      <button
+                        key={i}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleConfirmScene(heading)
+                        }}
+                        className="w-full px-5 py-3 rounded-xl font-mono font-bold text-sm text-left transition-all duration-150"
+                        style={{
+                          background: 'rgba(255,255,255,0.05)',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          color: 'rgba(255,255,255,0.8)',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'rgba(125,211,252,0.15)'
+                          e.currentTarget.style.borderColor = 'rgba(125,211,252,0.4)'
+                          e.currentTarget.style.color = '#7dd3fc'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+                          e.currentTarget.style.color = 'rgba(255,255,255,0.8)'
+                        }}
+                      >
+                        {heading}
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -714,44 +969,41 @@ const Session = () => {
                   <h2 className="text-white font-bold text-lg">Who's speaking?</h2>
                 </div>
 
-                <div className="p-6 flex flex-col gap-5">
-                  <div>
-                    <p className="text-white/50 text-xs uppercase tracking-widest mb-2">Character Name</p>
-                    <input
-                      type="text"
-                      placeholder="e.g. JOHN, DR. SMITH, NARRATOR..."
-                      value={characterName}
-                      onChange={e => setCharacterName(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleConfirmCharacter()}
-                      autoFocus
-                      className="w-full px-4 py-2.5 rounded-lg text-white font-mono text-sm outline-none"
-                      style={{
-                        background: 'rgba(255,255,255,0.07)',
-                        border: '1px solid rgba(255,255,255,0.15)',
-                      }}
-                    />
-                  </div>
-
-                  {/* Preview */}
-                  <div className="text-center font-mono text-white/70 text-sm py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <span className="font-bold text-white">
-                      {characterName.trim().toUpperCase() || 'CHARACTER NAME'}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={handleConfirmCharacter}
-                    className="w-full py-2.5 rounded-xl font-bold text-sm transition-all duration-200"
-                    style={{
-                      background: 'rgba(125,211,252,0.2)',
-                      border: '1px solid rgba(125,211,252,0.5)',
-                      color: '#7dd3fc',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(125,211,252,0.35)' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(125,211,252,0.2)' }}
-                  >
-                    Insert Character
-                  </button>
+                <div className="p-4 flex flex-col gap-2">
+                  {loadingCharacter ? (
+                    <div className="flex flex-col items-center justify-center py-8 gap-3">
+                      <div className="w-6 h-6 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
+                      <p className="text-white/40 text-sm font-mono">Generating characters...</p>
+                    </div>
+                  ) : (
+                    characterSuggestions.map((name, i) => (
+                      <button
+                        key={i}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleConfirmCharacter(name)
+                        }}
+                        className="w-full px-5 py-3 rounded-xl font-mono font-bold text-sm text-left transition-all duration-150"
+                        style={{
+                          background: 'rgba(255,255,255,0.05)',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          color: 'rgba(255,255,255,0.8)',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'rgba(125,211,252,0.15)'
+                          e.currentTarget.style.borderColor = 'rgba(125,211,252,0.4)'
+                          e.currentTarget.style.color = '#7dd3fc'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+                          e.currentTarget.style.color = 'rgba(255,255,255,0.8)'
+                        }}
+                      >
+                        {name}
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -796,6 +1048,116 @@ const Session = () => {
                       {opt}
                     </button>
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showDialogueBuilder && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowDialogueBuilder(false)} />
+              <div
+                className="relative z-10 w-[420px] rounded-2xl overflow-hidden shadow-2xl"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(15,15,25,0.98) 0%, rgba(30,20,50,0.98) 100%)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                }}
+              >
+                <div className="px-6 pt-5 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                  <p className="text-white/50 text-xs uppercase tracking-widest mb-1">Dialogue</p>
+                  <h2 className="text-white font-bold text-lg">What do they say?</h2>
+                </div>
+
+                <div className="p-4 flex flex-col gap-2">
+                  {loadingDialogue ? (
+                    <div className="flex flex-col items-center justify-center py-8 gap-3">
+                      <div className="w-6 h-6 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
+                      <p className="text-white/40 text-sm font-mono">Generating dialogue...</p>
+                    </div>
+                  ) : (
+                    dialogueSuggestions.map((suggestion, i) => (
+                      <button
+                        key={i}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleConfirmDialogue(suggestion)}
+                        }
+                        className="w-full px-5 py-3 rounded-xl font-mono text-sm text-left transition-all duration-150"
+                        style={{
+                          background: 'rgba(255,255,255,0.05)',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          color: 'rgba(255,255,255,0.8)',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'rgba(125,211,252,0.15)'
+                          e.currentTarget.style.borderColor = 'rgba(125,211,252,0.4)'
+                          e.currentTarget.style.color = '#7dd3fc'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+                          e.currentTarget.style.color = 'rgba(255,255,255,0.8)'
+                        }}
+                      >
+                        "{suggestion}"
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showActionBuilder && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowActionBuilder(false)} />
+              <div
+                className="relative z-10 w-[420px] rounded-2xl overflow-hidden shadow-2xl"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(15,15,25,0.98) 0%, rgba(30,20,50,0.98) 100%)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                }}
+              >
+                <div className="px-6 pt-5 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                  <p className="text-white/50 text-xs uppercase tracking-widest mb-1">Action</p>
+                  <h2 className="text-white font-bold text-lg">What happens next?</h2>
+                </div>
+
+                <div className="p-4 flex flex-col gap-2">
+                  {loadingActions ? (
+                    <div className="flex flex-col items-center justify-center py-8 gap-3">
+                      <div className="w-6 h-6 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
+                      <p className="text-white/40 text-sm font-mono">Generating suggestions...</p>
+                    </div>
+                  ) : (
+                    actionSuggestions.map((suggestion, i) => (
+                      <button
+                        key={i}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleConfirmAction(suggestion)
+                        }}
+                        className="w-full px-5 py-3 rounded-xl font-mono text-sm text-left transition-all duration-150"
+                        style={{
+                          background: 'rgba(255,255,255,0.05)',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          color: 'rgba(255,255,255,0.8)',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'rgba(125,211,252,0.15)'
+                          e.currentTarget.style.borderColor = 'rgba(125,211,252,0.4)'
+                          e.currentTarget.style.color = '#7dd3fc'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+                          e.currentTarget.style.color = 'rgba(255,255,255,0.8)'
+                        }}
+                      >
+                        {suggestion}
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -893,7 +1255,7 @@ const Session = () => {
       </div>
 
       <div className="absolute bottom-6 right-6 z-20 bg-black/60 text-white px-3 py-1 rounded-lg font-mono text-base">
-        {formatTime(elapsedSeconds)}/15:00
+        {formatTime(elapsedSeconds)}/{formatTime(GAME_DURATION_SEC)}
       </div>
 
       {showConfirm && (

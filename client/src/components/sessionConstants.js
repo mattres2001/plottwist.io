@@ -1,11 +1,17 @@
 // Note: this does not effect Session.jsx, this is for other components
 // Session.jsx has its own constants 
 
-export const ROUND_DURATION_MS = 5000
-export const WRITING_DURATION_MS = 5 * 60 * 1000
-export const REST_DURATION_MS = 5000
-export const GAME_DURATION_SEC = 15 * 60
-export const ROUND_DURATION_SEC = 5 * 60
+// export const ROUND_DURATION_MS = 5000
+// export const WRITING_DURATION_MS = 5 * 60 * 1000
+// export const REST_DURATION_MS = 5000
+// export const GAME_DURATION_SEC = 15 * 60
+// export const ROUND_DURATION_SEC = 5 * 60
+export const WRITING_DURATION_MS = 2 * 60 * 1000  // 2 min per act (3 acts = 6 min total)
+export const ROUND_DURATION_MS = 3000              // 3 sec for act start/end screens
+export const REST_DURATION_MS = 3000               // 3 sec rest between acts
+export const GAME_DURATION_SEC = 6 * 60            // 6 min total ✅ already correct
+export const ROUND_DURATION_SEC = 2 * 60           // 2 min per round ✅ already correct
+export const BETWEEN_TURN_COUNTDOWN = 3
 
 export const TURN_DURATION_SEC = 30
 export const ACTION_PROMPT_SEC = 5
