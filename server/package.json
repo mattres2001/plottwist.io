@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.1",
     "@clerk/clerk-sdk-node": "^4.13.23",
     "@clerk/express": "^2.0.2",
     "cors": "^2.8.6",

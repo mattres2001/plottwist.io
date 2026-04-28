@@ -12,9 +12,11 @@ import { Server } from 'socket.io';
 import { TURN_DURATION_SEC } from '../client/src/components/sessionConstants.js'
 import Move from './models/Move.js';
 import Session from './models/Session.js';
+import Anthropic from '@anthropic-ai/sdk'
 
 const app = express();
 const server = http.createServer(app);
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const PORT = process.env.PORT || 4000;
 
@@ -132,7 +134,7 @@ io.on("connection", (socket) => {
     });
 
     // ─── START SESSION ────────────────────────
-    socket.on("start_session", (sessionCode) => {
+    socket.on("start_session", async (sessionCode) => {
         const session = sessions[sessionCode];
         if (!session) return;
 
@@ -140,7 +142,29 @@ io.on("connection", (socket) => {
         session.started = true;
         session.sessionStartedAt = Date.now();
 
-        io.to(sessionCode).emit("session_started", { sessionStartedAt: session.sessionStartedAt });
+        // Generate the script prompt before broadcasting session_started
+        try {
+            const message = await anthropic.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 60,
+            messages: [{
+                role: "user",
+                content: `Generate a single creative screenplay prompt in this exact format:
+                    "[GENRE]: [one sentence scenario]"
+                    Example: "Horror: A family moves into a house that talks back"
+                    Respond with only the prompt, nothing else.`
+                }]
+            })
+            session.scriptPrompt = message.content[0].text.trim()
+        } catch (err) {
+            console.error("Failed to generate prompt:", err)
+            session.scriptPrompt = "Drama: A chance encounter changes two strangers' lives forever"
+        }
+
+        io.to(sessionCode).emit("session_started", { 
+            sessionStartedAt: session.sessionStartedAt,
+            scriptPrompt: session.scriptPrompt 
+        });
 
         startTurnLoop(sessionCode);
     });
@@ -238,12 +262,170 @@ io.on("connection", (socket) => {
                 currentTurnIndex: session?.currentTurnIndex ?? 0,
                 turnStartedAt: session?.turnStartedAt ?? Date.now(),
                 hostId: session?.hostId ?? null,
-                sessionStartedAt: session?.sessionStartedAt ?? null
+                sessionStartedAt: session?.sessionStartedAt ?? null,
+                scriptPrompt: session?.scriptPrompt ?? null
             });
         } catch (err) {
             console.error("request_state error:", err);
         }
     });
+
+    socket.on("request_dialogue_suggestions", async ({ sessionCode, scriptContent, currentAct }) => {
+        const session = sessions[sessionCode]
+        if (!session) return
+
+        try {
+            const message = await anthropic.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 200,
+            messages: [{
+                role: "user",
+                content: `You are helping players write a collaborative screenplay.
+                    The prompt is: "${session.scriptPrompt}"
+                    This is ${currentAct} of 3. ${currentAct === 'Act 1' ? 'Focus on establishing setting and introducing characters.' : currentAct === 'Act 2' ? 'Focus on rising tension and conflict.' : 'Focus on climax and resolution.'}
+                    Here is the script so far:
+                    ${scriptContent || '(nothing written yet)'}
+
+                    Generate exactly 4 short lines of dialogue that the current character would naturally say next.
+                    Each line should be 5-12 words, fit the tone, and feel like natural spoken dialogue.
+                    Respond ONLY with a raw JSON array of 4 strings, no markdown, no code fences, no explanation. Example:
+                    ["I never thought it would come to this.", "You don't understand what's at stake here.", "We need to leave. Right now.", "Tell me the truth. All of it."]`
+                }]
+            })
+
+            const raw = message.content[0].text.trim()
+            const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+            const suggestions = JSON.parse(cleaned)
+            socket.emit("dialogue_suggestions", { suggestions })
+        } catch (err) {
+            console.error("request_dialogue_suggestions error:", err)
+            socket.emit("dialogue_suggestions", {
+                suggestions: [
+                    "I never thought it would come to this.",
+                    "You don't understand what's at stake here.",
+                    "We need to leave. Right now.",
+                    "Tell me the truth. All of it."
+                ]
+            })
+        }
+    })
+
+    socket.on("request_action_suggestions", async ({ sessionCode, scriptContent, currentAct }) => {
+        const session = sessions[sessionCode]
+        if (!session) return
+
+        try {
+            const message = await anthropic.messages.create({
+                model: "claude-haiku-4-5-20251001",
+                max_tokens: 200,
+                messages: [{
+                    role: "user",
+                    content: `You are helping players write a collaborative screenplay.
+                        The prompt is: "${session.scriptPrompt}"
+                        This is ${currentAct} of 3. ${currentAct === 'Act 1' ? 'Focus on establishing setting and introducing characters.' : currentAct === 'Act 2' ? 'Focus on rising tension and conflict.' : 'Focus on climax and resolution.'}
+                        Here is the script so far:
+                        ${scriptContent || '(nothing written yet)'}
+
+                        Generate exactly 4 short action lines that would naturally continue this scene.
+                        Each action should be 5-10 words, cinematic, and fit the tone.
+                        Respond ONLY with a raw JSON array, no markdown, no code fences, no explanation.
+                        Respond ONLY with a JSON array of 4 strings. Example:
+                        ["John slams the door and walks away.", "The lights flicker and go dark.", "She picks up the phone and dials.", "A car screeches to a halt outside."]`
+                    }]
+            })
+
+            const raw = message.content[0].text.trim()
+            const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+            const suggestions = JSON.parse(cleaned)
+            socket.emit("action_suggestions", { suggestions })
+        } catch (err) {
+            console.error("request_action_suggestions error:", err)
+            socket.emit("action_suggestions", {
+            suggestions: [
+                "The door creaks open slowly.",
+                "A shadow moves across the wall.",
+                "Someone picks up the phone.",
+                "Footsteps echo down the hallway."
+            ]
+            })
+        }
+    })
+
+    socket.on("request_scene_suggestions", async ({ sessionCode, scriptContent, currentAct }) => {
+        const session = sessions[sessionCode]
+        if (!session) return
+
+        try {
+            const message = await anthropic.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 200,
+                messages: [{
+                    role: "user",
+                    content: `You are helping players write a collaborative screenplay.
+                        The prompt is: "${session.scriptPrompt}"
+                        This is ${currentAct} of 3. ${currentAct === 'Act 1' ? 'Focus on establishing setting and introducing characters.' : currentAct === 'Act 2' ? 'Focus on rising tension and conflict.' : 'Focus on climax and resolution.'}
+                        Here is the script so far:
+                        ${scriptContent || '(nothing written yet)'}
+
+                        Generate exactly 4 scene headings that would naturally continue this story.
+                        Each must follow standard screenplay format: INT. or EXT., then location, then - DAY or - NIGHT.
+                        Respond ONLY with a raw JSON array of 4 strings, no markdown, no code fences, no explanation. Example:
+                        ["INT. ABANDONED WAREHOUSE - NIGHT", "EXT. HOSPITAL ROOFTOP - DAY", "INT. DOWNTOWN DINER - DAY", "EXT. FOREST CLEARING - NIGHT"]`
+                }]
+            })
+
+            const raw = message.content[0].text.trim()
+            const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+            const suggestions = JSON.parse(cleaned)
+            socket.emit("scene_suggestions", { suggestions })
+        } catch (err) {
+            console.error("request_scene_suggestions error:", err)
+            socket.emit("scene_suggestions", {
+                suggestions: [
+                    "INT. ABANDONED WAREHOUSE - NIGHT",
+                    "EXT. HOSPITAL ROOFTOP - DAY",
+                    "INT. DOWNTOWN DINER - DAY",
+                    "EXT. FOREST CLEARING - NIGHT"
+                ]
+            })
+        }
+    })
+
+    socket.on("request_character_suggestions", async ({ sessionCode, scriptContent, currentAct }) => {
+        const session = sessions[sessionCode]
+        if (!session) return
+
+        try {
+            const message = await anthropic.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 150,
+            messages: [{
+                role: "user",
+                content: `You are helping players write a collaborative screenplay.
+                    The prompt is: "${session.scriptPrompt}"
+                    This is ${currentAct} of 3. ${currentAct === 'Act 1' ? 'Focus on establishing setting and introducing characters.' : currentAct === 'Act 2' ? 'Focus on rising tension and conflict.' : 'Focus on climax and resolution.'}
+                    Here is the script so far:
+                    ${scriptContent || '(nothing written yet)'}
+
+                    Generate exactly 4 character names that would fit naturally in this story.
+                    Mix new characters with any already introduced in the script.
+                    Each name should be 1-3 words, feel cinematic, and suit the genre.
+                    Respond ONLY with a raw JSON array of 4 strings, no markdown, no code fences, no explanation. Example:
+                    ["DETECTIVE HARRIS", "SARAH", "THE STRANGER", "DR. VOSS"]`
+                }]
+            })
+
+            const raw = message.content[0].text.trim()
+            const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+            const suggestions = JSON.parse(cleaned)
+            socket.emit("character_suggestions", { suggestions })
+        } catch (err) {
+            console.error("request_character_suggestions error:", err)
+            socket.emit("character_suggestions", {
+                suggestions: ["DETECTIVE HARRIS", "SARAH", "THE STRANGER", "DR. VOSS"]
+            })
+        }
+    })
 });
 
 export { io };
