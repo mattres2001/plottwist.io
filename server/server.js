@@ -12,6 +12,7 @@ import { Server } from 'socket.io';
 import { TURN_DURATION_SEC } from '../client/src/components/sessionConstants.js'
 import Move from './models/Move.js';
 import Session from './models/Session.js';
+import Script from './models/Script.js';
 import Anthropic from '@anthropic-ai/sdk'
 
 const app = express();
@@ -161,9 +162,11 @@ io.on("connection", (socket) => {
             session.scriptPrompt = "Drama: A chance encounter changes two strangers' lives forever"
         }
 
-        io.to(sessionCode).emit("session_started", { 
+        await Session.findOneAndUpdate({ code: sessionCode }, { status: 'active' })
+
+        io.to(sessionCode).emit("session_started", {
             sessionStartedAt: session.sessionStartedAt,
-            scriptPrompt: session.scriptPrompt 
+            scriptPrompt: session.scriptPrompt
         });
 
         startTurnLoop(sessionCode);
@@ -388,6 +391,30 @@ io.on("connection", (socket) => {
                     "EXT. FOREST CLEARING - NIGHT"
                 ]
             })
+        }
+    })
+
+    socket.on("save_script", async ({ sessionCode, content }) => {
+        const session = sessions[sessionCode]
+        if (!session) return
+        if (session.scriptSaved) return
+        session.scriptSaved = true
+
+        try {
+            if (!session.dbSessionId) {
+                const dbSession = await Session.findOne({ code: sessionCode })
+                if (dbSession) session.dbSessionId = dbSession._id
+            }
+            if (!session.dbSessionId) return
+
+            await Script.findOneAndUpdate(
+                { sessionId: session.dbSessionId },
+                { $setOnInsert: { content, prompt: session.scriptPrompt, players: session.players.map(p => p.userId) } },
+                { upsert: true }
+            )
+            await Session.findByIdAndUpdate(session.dbSessionId, { status: 'ended' })
+        } catch (err) {
+            console.error("save_script error:", err)
         }
     })
 

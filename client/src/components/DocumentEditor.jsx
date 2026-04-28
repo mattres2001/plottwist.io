@@ -13,7 +13,7 @@ const DocumentEditor = forwardRef(({ content, onChange, isMyTurn }, ref) => {
         content: content || "<p></p><p></p>",
         editorProps: {
             attributes: {
-                class: "focus:outline-none",
+                class: "focus:outline-none script-content",
                 style: "font-family: 'Courier New', Courier, monospace; font-size: 12px; min-height: 100%; cursor: text;"
             }
         },
