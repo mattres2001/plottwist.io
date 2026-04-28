@@ -5,6 +5,10 @@
     font-family: 'Josefin Sans', sans-serif;
 }
 
+.script-content, .script-content * {
+    font-family: 'Courier New', Courier, monospace !important;
+}
+
 .hide-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;

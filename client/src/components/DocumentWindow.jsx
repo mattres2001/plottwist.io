@@ -13,7 +13,7 @@ const DocumentWindow = forwardRef(({ lockedContent, currentContent, onContentCha
         <div className="p-6 flex-1" style={DOC_FONT_STYLE}>
           {lockedContent ? (
             <div
-              className="text-gray-800 mb-1 select-none pointer-events-none"
+              className="script-content text-gray-800 mb-1 select-none pointer-events-none"
               style={{ ...DOC_FONT_STYLE, wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'pre-wrap' }}
               dangerouslySetInnerHTML={{ __html: lockedContent }}
             />

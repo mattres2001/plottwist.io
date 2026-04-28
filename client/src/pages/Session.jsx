@@ -425,7 +425,7 @@ const Session = () => {
   }
 
   const handleConfirmAction = (suggestion) => {
-    editorRef.current?.insertHTML(`<p style="text-align:left"><em>${suggestion}</em></p><p><br></p>`)
+    editorRef.current?.insertHTML(`<p style="text-align:left">${suggestion}</p><p><br></p>`)
     setStructureState(prev => ({
       ...prev,
       lastWasScene: false,
@@ -1269,8 +1269,7 @@ const Session = () => {
               <button onClick={() => setShowDocument(false)} className="text-white/40 hover:text-white text-sm font-mono">Close ✕</button>
             </div>
             <div
-              className="flex-1 overflow-y-auto p-6 text-white font-mono text-sm leading-relaxed"
-              style={{ fontFamily: "'Courier New', Courier, monospace" }}
+              className="script-content flex-1 overflow-y-auto p-6 text-white text-sm leading-relaxed"
               dangerouslySetInnerHTML={{ __html: lockedContent }}
             />
           </div>
