@@ -7,6 +7,7 @@ import { serve } from 'inngest/express';
 import { clerkMiddleware } from '@clerk/express';
 import sessionRouter from './routes/sessionRoutes.js';
 import userRouter from './routes/userRoutes.js';
+import ratingRouter from './routes/ratingRoutes.js';
 import http from 'http';
 import { Server } from 'socket.io';
 import { TURN_DURATION_SEC } from '../client/src/components/sessionConstants.js'
@@ -471,6 +472,7 @@ app.get('/', (req, res) => res.send("Server is running"));
 app.use('/api/inngest', serve({ client: inngest, functions }));
 app.use('/api/session', sessionRouter);
 app.use('/api/users', userRouter);
+app.use('/api/ratings', ratingRouter);
 
 // Start server AFTER DB connects
 const startServer = async () => {

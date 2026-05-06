@@ -1,5 +1,6 @@
 import Session from '../models/Session.js'
 import Move from '../models/Move.js'
+import Script from '../models/Script.js'
 import { generateSessionCode } from '../utils/sessionCode.js'
 import { io } from '../server.js'
 
@@ -75,6 +76,48 @@ export const getSessionByCode = async (req, res) => {
     }
 
     res.json({ success: true, session })
+  } catch (error) {
+    console.log(error)
+    res.json({ success: false, message: error.message })
+  }
+}
+
+export const endSession = async (req, res) => {
+  try {
+    const { code } = req.params
+    const { script, prompt } = req.body
+
+    const session = await Session.findOneAndUpdate(
+      { code: code.toUpperCase() },
+      { status: 'ended' },
+      { new: true }
+    )
+
+    if (!session) {
+      return res.json({ success: false, message: 'Session not found' })
+    }
+
+    await Script.create({
+      sessionId: session._id,
+      content: script ?? '',
+      prompt: prompt ?? '',
+      players: session.players
+    })
+
+    res.json({ success: true })
+  } catch (error) {
+    console.log(error)
+    res.json({ success: false, message: error.message })
+  }
+}
+
+export const getGallerySessions = async (req, res) => {
+  try {
+    const scripts = await Script.find()
+      .sort({ createdAt: -1 })
+      .populate('sessionId', 'code')
+
+    res.json({ success: true, scripts })
   } catch (error) {
     console.log(error)
     res.json({ success: false, message: error.message })

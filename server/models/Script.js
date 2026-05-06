@@ -5,6 +5,8 @@ const scriptSchema = new mongoose.Schema({
     content: { type: String, required: true },
     prompt: { type: String },
     players: [{ type: String, ref: 'User' }],
+    averageRating: { type: Number, default: null },
+    ratingCount: { type: Number, default: 0 },
 }, { timestamps: true });
 
 const Script = mongoose.model('Script', scriptSchema);
